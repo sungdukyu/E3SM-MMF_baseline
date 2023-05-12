@@ -3,7 +3,7 @@
 ### Dataset Information
 Variable list can be found here: https://docs.google.com/spreadsheets/d/1ljRfHq6QB36u0TuoxQXcV4_DSQUR0X4UimZ4QHR8f9M/edit#gid=0
 
-1: E2SM-MMF High-Resolution Real Geography
+1: E3SM-MMF High-Resolution Real Geography
 - Two files (one for input; the other for output) are produced at each time step for a 10-year long simulation (with timestep = 20 min.), totaling 525,600 files (= 10 year * 365 days/year * 72 steps/day * 2 files/day)
 - Total data volume: 43 TB
 - File size:
