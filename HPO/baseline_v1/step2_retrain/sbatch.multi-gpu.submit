@@ -2,8 +2,8 @@
 #SBATCH --job-name="Retrain_multi-nodes"
 #SBATCH --output="logs/Task3-Step2-retrain.%j.%N.out"
 #SBATCH -q regular
-#SBATCH --nodes=4
-#SBATCH --gpus=16
+#SBATCH --nodes=2
+#SBATCH --gpus=8
 #SBATCH --constraint=gpu
 #SBATCH --export=ALL
 #SBATCH --account=m4331
@@ -23,7 +23,7 @@ f_progress=./parallel.progress.${jobid}.log
 export WDIR=`pwd`
 
 # set number of jobs per node (note that 4 gpus per node)
-export JOBS_PER_NODE=6
+export JOBS_PER_NODE=22
 
 # set up gnu parallel
 bash expand_nodelist.sh $SLURM_JOB_NODELIST > logs/hostfile.${jobid}.txt

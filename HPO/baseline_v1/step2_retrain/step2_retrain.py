@@ -163,10 +163,11 @@ def main(lot_id:str, trial_id:str):
 
     ### Make sure to change this parameters ###
     ###########################################
-    fn_retrained = f'retrained_models/step2_{lot_id}_trial_id.h5'
-    fn_metrics   = f'retrained_models/metrics/step2_{lot_id}_trial_id.h5.metrics.csv'
+    fn_retrained_best = f'retrained_models/step2_{lot_id}_{trial_id}.best.h5'
+    fn_retrained_last = f'retrained_models/step2_{lot_id}_{trial_id}.last.h5'
+    fn_metrics        = f'retrained_models/metrics/step2_{lot_id}_{trial_id}.metrics.csv'
     Path('./retrained_models/metrics').mkdir(parents=True, exist_ok=True)
-    num_epochs = 36
+    num_epochs = 40
     ###########################################
 
     ### Dataset prep ###
@@ -241,11 +242,15 @@ def main(lot_id:str, trial_id:str):
 
     ### fit ###
     # callbacks
-    checkpoint = keras.callbacks.ModelCheckpoint(filepath=fn_retrained,
-                                                save_weights_only=False,
-                                                verbose=1,
-                                                monitor='val_loss',
-                                                save_best_only=True)
+    checkpoint_best = keras.callbacks.ModelCheckpoint(filepath=fn_retrained_best,
+                                                      save_weights_only=False,
+                                                      verbose=1,
+                                                      monitor='val_loss',
+                                                      save_best_only=True) # first checkpoint for best model
+    checkpoint_last = keras.callbacks.ModelCheckpoint(filepath=fn_retrained_last,
+                                                      save_weights_only=False,
+                                                      verbose=1,
+                                                      save_best_only=False) # second checkpoint for continuing training
     csv_logger = keras.callbacks.CSVLogger(fn_metrics, append=True)
     earlystop = keras.callbacks.EarlyStopping('val_loss', patience=8)
 
@@ -269,7 +274,7 @@ def main(lot_id:str, trial_id:str):
                         batch_size=batch_size,
                         validation_data=tds_val,
                         verbose=2,
-                        callbacks=[checkpoint, csv_logger, earlystop])
+                        callbacks=[checkpoint_best, checkpoint_last, csv_logger, earlystop])
 
 if __name__ == '__main__':
 
