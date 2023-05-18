@@ -12,15 +12,25 @@ from keras_tuner import RandomSearch
 import os
 import tensorflow_addons as tfa
 import sys
-import argparse
 import glob
 import random
 from pathlib import Path
 
+### Make sure to change this parameters ###
+###########################################
+input_length = 124
+output_length = 128
+output_length_lin = 120
+output_length_relu = 8
+f_trial_info = '../step1_analysis/step1_results.csv'
+###########################################
+
 def read_args():
     # argv[1]: lot id
     # argv[2]: trial id
-    return sys.argv[1], sys.argv[2]
+    # argv[3]: continueed training if "continue";
+    #          ohterwise, training starts from the checkpoint saved during step 1 HPO.
+    return sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv)==4 else "none"
 
 def set_environment():
     ## Part 1: Set CUDA_VISIBLE_DEVICES
@@ -66,17 +76,8 @@ def set_environment():
         for gpu in gpus:
             print("GPU:", gpu)
 
-def build_model(lot_id:str, trial_id:str, n_samples:int):
-    
-    ### Make sure to change this parameters ###
-    ###########################################
-    input_length = 124
-    output_length = 128
-    output_length_lin = 120
-    output_length_relu = 8
-    f_trial_info = '../step1_analysis/step1_results.csv'
-    ###########################################
-
+def build_model(lot_id:str, trial_id:str, n_samples:int, sw_continue:str):
+   
     # read trial info
     results_step1 =  pd.read_csv(f_trial_info)
     trial_info = results_step1.loc[(results_step1['lot']==lot_id)*
@@ -124,6 +125,16 @@ def build_model(lot_id:str, trial_id:str, n_samples:int):
 
     model = keras.Model(input_layer, output_layer, name='retrained_model')
 
+    # load weights
+    if sw_continue.lower() == "continue":
+        fn_model = f'retrained_models/step2_{lot_id}_{trial_id}.last.h5'
+        model = models.load_model(fn_model, compile=False)
+        print(f'model weights are initialized with: {fn_model}')
+    else:
+        f_wgts = f'../results/{lot_id}/{trial_id}/checkpoint'
+        model.load_weights(f_wgts)
+        print(f'model weights are initizlized with: {f_wgts}')
+
     # Optimizer
     # Set up cyclic learning rate
     INIT_LR = 2.5e-4
@@ -131,8 +142,8 @@ def build_model(lot_id:str, trial_id:str, n_samples:int):
     steps_per_epoch = n_samples // hp_batch_size
     clr = tfa.optimizers.CyclicalLearningRate(initial_learning_rate=INIT_LR,
                                               maximal_learning_rate=MAX_LR,
-                                              scale_fn=lambda x: 1/(2.**(x-1)),
-                                              step_size= 2 * steps_per_epoch,
+                                              scale_fn = lambda x: 1/(2.**(x-1)),
+                                              step_size = 2 * steps_per_epoch,
                                               scale_mode = 'cycle'
                                              )
 
@@ -150,16 +161,12 @@ def build_model(lot_id:str, trial_id:str, n_samples:int):
                   loss='mse',
                   metrics=['mse','mae','accuracy'])
 
-    # load weights
-    f_wgts = f'../results/{lot_id}/{trial_id}/checkpoint'
-    model.load_weights(f_wgts)
-    
     # model summary
     print(model.summary())
 
     return model, hp_batch_size
 
-def main(lot_id:str, trial_id:str):
+def main(lot_id:str, trial_id:str, sw_continue:str):
 
     ### Make sure to change this parameters ###
     ###########################################
@@ -238,7 +245,8 @@ def main(lot_id:str, trial_id:str):
     ### build model ###
     model, batch_size = build_model(lot_id=lot_id,
                                     trial_id=trial_id,
-                                    n_samples=len(f_mli))
+                                    n_samples=len(f_mli),
+                                    sw_continue=sw_continue)
 
     ### fit ###
     # callbacks
@@ -278,6 +286,6 @@ def main(lot_id:str, trial_id:str):
 
 if __name__ == '__main__':
 
-    lot_id, trial_id = read_args()
+    lot_id, trial_id, sw_continue = read_args()
     set_environment()
-    main(lot_id, trial_id)
+    main(lot_id, trial_id, sw_continue)
