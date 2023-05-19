@@ -18,11 +18,11 @@ from pathlib import Path
 
 ### Make sure to change this parameters ###
 ###########################################
-input_length = 124
-output_length = 128
-output_length_lin = 120
+input_length = 425
+output_length = 368
+output_length_lin = 360
 output_length_relu = 8
-f_trial_info = '../step1_analysis/step1_results.csv'
+f_trial_info = '../step1_analysis/step1_results_v2.csv'
 ###########################################
 
 def read_args():
@@ -179,15 +179,30 @@ def main(lot_id:str, trial_id:str, sw_continue:str):
 
     ### Dataset prep ###
     # in/out variable lists
-    vars_mli = ['state_t','state_q0001','state_ps','pbuf_SOLIN', 'pbuf_LHFLX', 'pbuf_SHFLX']
-    vars_mlo = ['ptend_t','ptend_q0001','cam_out_NETSW','cam_out_FLWDS','cam_out_PRECSC',
-                'cam_out_PRECC','cam_out_SOLS','cam_out_SOLL','cam_out_SOLSD','cam_out_SOLLD']
+    vars_mli      = ['state_t','state_q0001', 'state_q0002', 'state_q0003', 'state_u', 'state_v',
+                     'state_ps', 'pbuf_SOLIN','pbuf_LHFLX', 'pbuf_SHFLX',  'pbuf_TAUX', 'pbuf_TAUY', 'pbuf_COSZRS',
+                     'cam_in_ALDIF', 'cam_in_ALDIR', 'cam_in_ASDIF', 'cam_in_ASDIR', 'cam_in_LWUP',
+                     'cam_in_ICEFRAC', 'cam_in_LANDFRAC', 'cam_in_OCNFRAC', 'cam_in_SNOWHICE', 'cam_in_SNOWHLAND']
+    vars_mli_utls = ['pbuf_ozone', 'pbuf_CH4', 'pbuf_N2O']
+    vars_mlo      = ['ptend_t','ptend_q0001','ptend_q0002','ptend_q0003', 'ptend_u', 'ptend_v',
+                     'cam_out_NETSW', 'cam_out_FLWDS', 'cam_out_PRECSC', 'cam_out_PRECC',
+                     'cam_out_SOLS', 'cam_out_SOLL', 'cam_out_SOLSD', 'cam_out_SOLLD']
 
     # normalization/scaling factors
     mli_mean  = xr.open_dataset('../../../norm_factors/mli_mean.nc',  engine='netcdf4')
     mli_min   = xr.open_dataset('../../../norm_factors/mli_min.nc',   engine='netcdf4')
     mli_max   = xr.open_dataset('../../../norm_factors/mli_max.nc',   engine='netcdf4')
     mlo_scale = xr.open_dataset('../../../norm_factors/mlo_scale.nc', engine='netcdf4')
+    
+    # (subset ozone, ch4, n2o - that only 5th-20th layers are used.)
+    for k, kds in enumerate([mli_mean, mli_min, mli_max]):
+        kds_utls = kds[vars_mli_utls]\
+              .isel(lev=slice(5,21)).rename({'lev':'lev2'})
+        kds = kds[vars_mli]
+        kds = kds.merge(kds_utls)
+        if k==0: mli_mean=kds
+        if k==1: mli_min=kds
+        if k==2: mli_max=kds
 
     # train dataset for HPO
     # (subsampling id done here by "stride_sample")
@@ -211,35 +226,43 @@ def main(lot_id:str, trial_id:str, sw_continue:str):
     def load_nc_dir_with_generator(filelist:list):
         def gen():
             for file in filelist:
-                # read mli
+
+                # input read / preprocess #
+                # read mli (-> ds)
                 ds = xr.open_dataset(file, engine='netcdf4')
+                # subset ozone, ch4, n2o
+                ds_utls = ds[vars_mli_utls]\
+                          .isel(lev=slice(5,21)).rename({'lev':'lev2'})
+                # combine ds and ds_utls
                 ds = ds[vars_mli]
+                ds = ds.merge(ds_utls)
 
-                # read mlo
+                # output read / preprocess #
+                # read mlo (-> dso)
                 dso = xr.open_dataset(file.replace('.mli.','.mlo.'), engine='netcdf4')
-
-                # make mlo variales: ptend_t and ptend_q0001
-                dso['ptend_t'] = (dso['state_t'] - ds['state_t'])/1200 # T tendency [K/s]
-                dso['ptend_q0001'] = (dso['state_q0001'] - ds['state_q0001'])/1200 # Q tendency [kg/kg/s]
+                # make mlo tendency variales ("ptend_xxxx"):
+                for kvar in ['state_t','state_q0001','state_q0002', 'state_q0003', 'state_u', 'state_v']:
+                    dso[kvar.replace('state','ptend')] = (dso[kvar] - ds[kvar])/1200 # timestep=1200[sec]
+                # remove "state_xxxx"
                 dso = dso[vars_mlo]
 
-                # normalizatoin, scaling
+                # normalizatoin, scaling #
                 ds = (ds-mli_mean)/(mli_max-mli_min)
                 dso = dso*mlo_scale
 
-                # stack
-                #ds = ds.stack({'batch':{'sample','ncol'}}) # this line was for data files that include 'sample' dimension
+                # flatten input variables #
+                #ds = ds.stack({'batch':{'sample','ncol'}})
                 ds = ds.stack({'batch':{'ncol'}})
                 ds = ds.to_stacked_array("mlvar", sample_dims=["batch"], name='mli')
                 #dso = dso.stack({'batch':{'sample','ncol'}})
                 dso = dso.stack({'batch':{'ncol'}})
                 dso = dso.to_stacked_array("mlvar", sample_dims=["batch"], name='mlo')
 
-                yield (ds.values, dso.values) # generating a tuple of (input, output)
+                yield (ds.values, dso.values)
 
         return tf.data.Dataset.from_generator(gen,
                                               output_types=(tf.float64, tf.float64),
-                                              output_shapes=((None,input_length),(None,output_length))
+                                              output_shapes=((None,input_length),(None,output_length)),
                                              )
 
     ### build model ###
