@@ -2,13 +2,14 @@
 #SBATCH --job-name="HPO_v1"
 #SBATCH --output="logs/srun-kerastuner-%j.%N.out"
 #SBATCH --nodes=1
-#SBATCH --gpus=v100-16:NUM_GPUS_PER_NODE_HERE
-#SBATCH --ntasks=NTASKS_HERE
+#SBATCH --partition=GPU-shared
+#SBATCH --gpus=v100-16:4
+#SBATCH --ntasks=5
 #SBATCH --export=ALL
 #SBATCH --account=atm200007p
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=jerryL9@uci.edu
-#SBATCH -t 12:00:00
+#SBATCH -t 8:00:00
 
 
 [[ -d ./logs/$2 ]] || mkdir ./logs/$2
