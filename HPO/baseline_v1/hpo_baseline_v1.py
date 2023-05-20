@@ -38,7 +38,7 @@ def set_environment(num_gpus_per_node=4, oracle_port = "8000"):
     print(f'SY DEBUG: procid-{procid} / GPU-ID-{os.environ["CUDA_VISIBLE_DEVICES"]}')
 
     os.environ["KERASTUNER_ORACLE_IP"] = oracle + ".ib.bridges2.psc.edu" # Use full hostname
-    os.environ["KERASTUNER_ORACLE_PORT"] = "8000"
+    os.environ["KERASTUNER_ORACLE_PORT"] = oracle_port
     print("KERASTUNER_TUNER_ID:    %s"%os.environ["KERASTUNER_TUNER_ID"])
     print("KERASTUNER_ORACLE_IP:   %s"%os.environ["KERASTUNER_ORACLE_IP"])
     print("KERASTUNER_ORACLE_PORT: %s"%os.environ["KERASTUNER_ORACLE_PORT"])
@@ -117,6 +117,7 @@ class MyHyperModel(HyperModel):
                                                   scale_mode = 'cycle'
                                                  )
         
+        # Set up optimizer
         if hp_optimizer == "Adam":
             my_optimizer = keras.optimizers.Adam(learning_rate=clr)
         elif hp_optimizer == "RAdam":

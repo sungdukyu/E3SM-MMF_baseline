@@ -6,9 +6,9 @@ echo SLURMD_NODENAME $SLURMD_NODENAME
 
 #export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/lib/
 
-module load cudnn cudatoolkit
-source ~/.bashrc
-conda activate tf_conda
+source /opt/packages/anaconda3/etc/profile.d/conda.sh
+module load anaconda3
+conda activate tf2
 echo " "
 echo "Current conda env:"
 echo $CONDA_PREFIX
