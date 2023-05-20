@@ -15,27 +15,29 @@ import argparse
 import glob
 import random
 
-def set_environment(workers_per_node, workers_per_gpu):
+def set_environment(num_gpus_per_node=4, oracle_port = "8000"):
     print('<< set_environment START >>')
+    num_gpus_per_node = str(num_gpus_per_node)
     nodename = os.environ['SLURMD_NODENAME']
     procid = os.environ['SLURM_LOCALID']
     print(f'node name: {nodename}')
     print(f'procid:    {procid}')
-    # stream = os.popen('scontrol show hostname $SLURM_NODELIST')
-    # output = stream.read()
-    # oracle = output.split("\n")[0]
-    oracle_ip = os.environ["NERSC_NODE_HSN_IP"]
-    print(f'oracle ip: {oracle_ip}')
-    if procid==str(workers_per_node): # This takes advantage of the fact that procid numbering starts with ZERO
+    stream = os.popen('scontrol show hostname $SLURM_NODELIST')
+    output = stream.read()
+    oracle = output.split("\n")[0]
+    # oracle_ip = os.environ["NERSC_NODE_HSN_IP"]
+    print(f'oracle ip: {oracle}')
+    if procid==str(num_gpus_per_node): # This takes advantage of the fact that procid numbering starts with ZERO
         os.environ["KERASTUNER_TUNER_ID"] = "chief"
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         print("Keras Tuner Oracle has been assigned.")
     else:
         os.environ["KERASTUNER_TUNER_ID"] = "tuner-" + str(nodename) + "-" + str(procid)
-        os.environ["CUDA_VISIBLE_DEVICES"] = f"{int(int(procid)//workers_per_gpu)}"
+        # os.environ["CUDA_VISIBLE_DEVICES"] = f"{int(int(procid)//workers_per_gpu)}"
+        os.environ["CUDA_VISIBLE_DEVICES"] = procid
     print(f'SY DEBUG: procid-{procid} / GPU-ID-{os.environ["CUDA_VISIBLE_DEVICES"]}')
 
-    os.environ["KERASTUNER_ORACLE_IP"] = oracle_ip
+    os.environ["KERASTUNER_ORACLE_IP"] = oracle + ".ib.bridges2.psc.edu" # Use full hostname
     os.environ["KERASTUNER_ORACLE_PORT"] = "8000"
     print("KERASTUNER_TUNER_ID:    %s"%os.environ["KERASTUNER_TUNER_ID"])
     print("KERASTUNER_ORACLE_IP:   %s"%os.environ["KERASTUNER_ORACLE_IP"])
@@ -251,12 +253,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # assign GPUs for workers
-    gpus_per_node = 4 # NERSC Perlmutter
-    ntasks = int(os.environ['SLURM_NTASKS']) # "total number of workers" + 1 (for oracle)
-    nnodes = int(os.environ['SLURM_JOB_NUM_NODES'])
-    workers_per_node = int((ntasks - 1) / nnodes)
-    workers_per_gpu  = int(workers_per_node / gpus_per_node)
-    set_environment(workers_per_node=workers_per_node, workers_per_gpu=workers_per_gpu)
+    # gpus_per_node = 4 # NERSC Perlmutter
+    # ntasks = int(os.environ['SLURM_NTASKS']) # "total number of workers" + 1 (for oracle)
+    # nnodes = int(os.environ['SLURM_JOB_NUM_NODES'])
+    # workers_per_node = int((ntasks - 1) / nnodes)
+    # workers_per_gpu  = int(workers_per_node / gpus_per_node)
+    set_environment(num_gpus_per_node=4, oracle_port = "8000")
 
     # limit memory preallocation
     physical_devices = tf.config.list_physical_devices('GPU')
