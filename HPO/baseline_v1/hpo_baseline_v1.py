@@ -10,6 +10,7 @@ from keras_tuner import HyperModel
 from keras_tuner import RandomSearch
 import os
 import tensorflow_addons as tfa
+from qhoptim.tf import QHAdamOptimizer
 import argparse
 import glob
 import random
@@ -63,14 +64,14 @@ class MyHyperModel(HyperModel):
 
     def build(self, hp):        
         # hyperparameters to be tuned:
-        n_layers = hp.Int("num_layers", 2, 12, default=2)
+        n_layers = hp.Int("num_layers", 4, 12, default=4)
         hp_act = hp.Choice("activation", ['relu', 'elu', 'leakyrelu'], default='relu')
         hp_batch_size = hp.Choice("batch_size",
                                   [  48,   96,  192,  384,  768, 1152, 1536, 2304, 3072],
                                   default=3072)
-        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam', 'RMSprop', 'SGD'], default='Adam')
+        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam', 'QHAdam'], default='Adam')
         
-        # constrcut a model
+        # construct a model
         # input layer
         x = keras.layers.Input(shape=(self.input_length,), name='input')
         input_layer = x
@@ -114,15 +115,13 @@ class MyHyperModel(HyperModel):
                                                   scale_mode = 'cycle'
                                                  )
         
-        if   hp_optimizer == "Adam":
+        if hp_optimizer == "Adam":
             my_optimizer = keras.optimizers.Adam(learning_rate=clr)
         elif hp_optimizer == "RAdam":
             my_optimizer = tfa.optimizers.RectifiedAdam(learning_rate=clr)
-        elif hp_optimizer == "RMSprop":
-            my_optimizer = keras.optimizers.RMSprop(learning_rate=clr)
-        elif hp_optimizer == "SGD":
-            my_optimizer = keras.optimizers.SGD(learning_rate=clr)
-                                 
+        elif hp_optimizer == "QHAdam":
+            my_optimizer = QHAdamOptimizer(learning_rate = clr, nu2 = 1.0, beta1 = .995, beta2 = .999)
+                                       
         # compile
         model.compile(optimizer=my_optimizer, #optimizer=keras.optimizers.Adam(learning_rate=clr),
                       loss='mse',
