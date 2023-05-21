@@ -7,7 +7,7 @@
 #SBATCH --ntasks=21
 #SBATCH --constraint=gpu
 #SBATCH --export=ALL
-#SBATCH --account=m4331
+#SBATCH --account=m4334
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sungduk@uci.edu
 #SBATCH -t 12:00:00
