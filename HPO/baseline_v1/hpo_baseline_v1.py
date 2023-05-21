@@ -231,7 +231,7 @@ def main():
                                       tds_val=tds_val),
                          objective='val_loss',
                          max_trials=max_trials,
-                         max_retries_per_trial = 1,
+                         # max_retries_per_trial = 1,
                          executions_per_trial = 1,
                          directory='results/',
                          overwrite=False,
