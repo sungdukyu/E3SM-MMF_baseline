@@ -1,7 +1,7 @@
 import xarray as xr
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
+import tensorflow.keras as keras
 from keras import models
 from keras import layers
 from keras import callbacks
@@ -10,6 +10,7 @@ from keras_tuner import HyperModel
 from keras_tuner import RandomSearch
 import os
 import tensorflow_addons as tfa
+from qhoptim.tf import QHAdamOptimizer
 import argparse
 import glob
 import random
@@ -63,37 +64,34 @@ class MyHyperModel(HyperModel):
 
     def build(self, hp):        
         # hyperparameters to be tuned:
-        n_layers = hp.Int("num_layers", 2, 12, default=2)
-        hp_act = hp.Choice("activation", ['relu', 'elu', 'leakyrelu'], default='relu')
+        alpha = hp.Float("leak", min_value = .05, max_value = .2)
+        n_layers = hp.Int("num_layers", 5, 12, default=2)
+        batch_norm = hp.Boolean("batch_normalization")
+        dp_rate = hp.Float("dropout", min_value = 0, max_value = .25)
         hp_batch_size = hp.Choice("batch_size",
                                   [  48,   96,  192,  384,  768, 1152, 1536, 2304, 3072],
                                   default=3072)
-        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam', 'RMSprop', 'SGD'], default='Adam')
+        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam', 'QHAdam'], default='Adam')
         
-        # constrcut a model
+        # construct a model
         # input layer
         x = keras.layers.Input(shape=(self.input_length,), name='input')
         input_layer = x
-        
+        if batch_norm:
+            x = keras.layers.BatchNormalization()(x)
+        x = keras.layers.LeakyReLU(alpha=alpha)(x)
         # hidden layers
         for klayer in range(n_layers):
             n_units = hp.Int(f"units_{klayer}", min_value=128, max_value=1024, step=128, default=128)
             x = keras.layers.Dense(n_units)(x)
-            if hp_act=='relu':
-                x = keras.layers.ReLU()(x) 
-            elif hp_act=='elu':
-                x = keras.layers.ELU()(x)
-            elif hp_act=='leakyrelu':
-                x = keras.layers.LeakyReLU(alpha=.15)(x)
+            if batch_norm:
+                x = keras.layers.BatchNormalization()(x)
+            x = keras.layers.Dropout(dp_rate)(x)
+            x = keras.layers.LeakyReLU(alpha=alpha)(x)
                 
         # output layer (upper)
         x = keras.layers.Dense(self.output_length)(x)
-        if   hp_act == 'relu':
-            x = keras.layers.ReLU()(x) 
-        elif hp_act == 'elu':
-            x = keras.layers.ELU()(x)
-        elif hp_act == 'leakyrelu':
-            x = keras.layers.LeakyReLU(alpha=.15)(x)
+        x = keras.layers.LeakyReLU(alpha=alpha)(x)
         
         # output layer (lower)
         output_lin   = keras.layers.Dense(self.output_length_lin,activation='linear')(x)
@@ -113,15 +111,13 @@ class MyHyperModel(HyperModel):
                                                   step_size= 2 * steps_per_epoch,
                                                   scale_mode = 'cycle'
                                                  )
-        
-        if   hp_optimizer == "Adam":
-            my_optimizer = keras.optimizers.Adam(learning_rate=clr)
+        # Set up optimizer
+        if hp_optimizer == "Adam":
+            my_optimizer = keras.optimizers.Adam(learning_rate = clr)
         elif hp_optimizer == "RAdam":
-            my_optimizer = tfa.optimizers.RectifiedAdam(learning_rate=clr)
-        elif hp_optimizer == "RMSprop":
-            my_optimizer = keras.optimizers.RMSprop(learning_rate=clr)
-        elif hp_optimizer == "SGD":
-            my_optimizer = keras.optimizers.SGD(learning_rate=clr)
+            my_optimizer = tfa.optimizers.RectifiedAdam(learning_rate = clr)
+        elif hp_optimizer == "QHAdam":
+            my_optimizer = QHAdamOptimizer(learning_rate = clr, nu2=1.0, beta1=0.995, beta2=0.999)
                                  
         # compile
         model.compile(optimizer=my_optimizer, #optimizer=keras.optimizers.Adam(learning_rate=clr),
