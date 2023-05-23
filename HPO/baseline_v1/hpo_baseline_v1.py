@@ -56,6 +56,7 @@ class MyHyperModel(HyperModel):
         self.tds_val = tds_val
         self.tds_shuffle_buffer = 384*30
         
+	# Nana we should add new variables to input
         self.input_length = 124 # 60 + 60 + 1 +1 +1 + 1
         self.output_length_lin  = 120 # 60 + 60
         self.output_length_relu = 8
