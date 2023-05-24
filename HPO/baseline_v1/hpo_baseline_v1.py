@@ -66,7 +66,7 @@ class MyHyperModel(HyperModel):
     def build(self, hp):        
         # hyperparameters to be tuned:
         alpha = hp.Float("leak", min_value = .05, max_value = .2)
-        n_layers = hp.Int("num_layers", 5, 12, default=2)
+        n_layers = hp.Int("num_layers", 4, 12, default=4)
         batch_norm = hp.Boolean("batch_normalization")
         dp_rate = hp.Float("dropout", min_value = 0, max_value = .25)
         hp_batch_size = hp.Choice("batch_size",
