@@ -9,7 +9,7 @@
 #SBATCH --account=atm200007p
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=jerryL9@uci.edu
-#SBATCH -t 8:00:00
+#SBATCH -t 5:00:00
 
 
 [[ -d ./logs/$2 ]] || mkdir ./logs/$2

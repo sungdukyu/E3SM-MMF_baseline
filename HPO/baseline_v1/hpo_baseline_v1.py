@@ -10,7 +10,7 @@ from keras_tuner import HyperModel
 from keras_tuner import RandomSearch
 import os
 import tensorflow_addons as tfa
-from qhoptim.tf import QHAdamOptimizer
+# from qhoptim.tf import QHAdamOptimizer
 import argparse
 import glob
 import random
@@ -67,7 +67,6 @@ class MyHyperModel(HyperModel):
     def build(self, hp):        
         # hyperparameters to be tuned:
         n_layers = hp.Int("num_layers", 4, 12, default=4)
-        hp_act = hp.Choice("activation", ['relu', 'elu', 'leakyrelu'], default='relu')
         hp_batch_size = hp.Choice("batch_size",
                                   [  48,   96,  192,  384,  768, 1152, 1536, 2304, 3072],
                                   default=3072)
@@ -82,21 +81,11 @@ class MyHyperModel(HyperModel):
         for klayer in range(n_layers):
             n_units = hp.Int(f"units_{klayer}", min_value=128, max_value=1024, step=128, default=128)
             x = keras.layers.Dense(n_units)(x)
-            if hp_act=='relu':
-                x = keras.layers.ReLU()(x) 
-            elif hp_act=='elu':
-                x = keras.layers.ELU()(x)
-            elif hp_act=='leakyrelu':
-                x = keras.layers.LeakyReLU(alpha=.15)(x)
+            x = keras.layers.LeakyReLU(alpha=.15)(x)
                 
         # output layer (upper)
         x = keras.layers.Dense(self.output_length)(x)
-        if   hp_act == 'relu':
-            x = keras.layers.ReLU()(x) 
-        elif hp_act == 'elu':
-            x = keras.layers.ELU()(x)
-        elif hp_act == 'leakyrelu':
-            x = keras.layers.LeakyReLU(alpha=.15)(x)
+        x = keras.layers.LeakyReLU(alpha=.15)(x)
         
         # output layer (lower)
         output_lin   = keras.layers.Dense(self.output_length_lin,activation='linear')(x)
@@ -116,8 +105,9 @@ class MyHyperModel(HyperModel):
                                                   step_size= 2 * steps_per_epoch,
                                                   scale_mode = 'cycle'
                                                  )
-        
+
         # Set up optimizer
+        # clr = hp.Float("lr", min_value=1e-4, max_value=1e-3, sampling="log")
         if hp_optimizer == "Adam":
             my_optimizer = keras.optimizers.Adam(learning_rate=clr)
         elif hp_optimizer == "RAdam":
