@@ -4,13 +4,13 @@
 #SBATCH -q regular
 #SBATCH --nodes=1
 #SBATCH --gpus=4
-#SBATCH --ntasks=41
+#SBATCH --ntasks=21
 #SBATCH --constraint=gpu
 #SBATCH --export=ALL
-#SBATCH --account=m4331
+#SBATCH --account=m4334
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sungduk@uci.edu
-#SBATCH -t 12:00:00
+#SBATCH -t 7:10:00
 
 # ntasks controls the number of keras-tuner workers, which is (ntasks-1).
 
