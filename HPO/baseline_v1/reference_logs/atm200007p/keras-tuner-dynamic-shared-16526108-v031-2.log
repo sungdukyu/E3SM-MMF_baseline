@@ -1,0 +1,349 @@
+2023-05-25 03:12:28.438125: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX2 AVX512F FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2023-05-25 03:12:37.482202: E tensorflow/stream_executor/cuda/cuda_blas.cc:2981] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2023-05-25 03:12:55.468823: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libnvinfer.so.7'; dlerror: libnvinfer.so.7: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: :/jet/home/jlin96/.conda/envs/tf2/lib/:/jet/home/jlin96/.conda/envs/tf2/lib/
+2023-05-25 03:12:55.469502: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libnvinfer_plugin.so.7'; dlerror: libnvinfer_plugin.so.7: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: :/jet/home/jlin96/.conda/envs/tf2/lib/:/jet/home/jlin96/.conda/envs/tf2/lib/
+2023-05-25 03:12:55.469517: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Cannot dlopen some TensorRT libraries. If you would like to use Nvidia GPU with TensorRT, please make sure the missing libraries mentioned above are installed properly.
+2023-05-25 03:13:39.700450: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX2 AVX512F FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2023-05-25 03:13:41.736692: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 14615 MB memory:  -> device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:89:00.0, compute capability: 7.0
+<< set_environment START >>
+node name: v031
+procid:    2
+oracle ip: v031
+SY DEBUG: procid-2 / GPU-ID-2
+KERASTUNER_TUNER_ID:    tuner-v031-2
+KERASTUNER_ORACLE_IP:   v031.ib.bridges2.psc.edu
+KERASTUNER_ORACLE_PORT: 8000
+<< set_environment END >>
+(atm200007p) after-set_env
+[PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+Model: "trial_model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input (InputLayer)             [(None, 124)]        0           []                               
+                                                                                                  
+ dense (Dense)                  (None, 128)          16000       ['input[0][0]']                  
+                                                                                                  
+ leaky_re_lu (LeakyReLU)        (None, 128)          0           ['dense[0][0]']                  
+                                                                                                  
+ dense_1 (Dense)                (None, 128)          16512       ['leaky_re_lu[0][0]']            
+                                                                                                  
+ leaky_re_lu_1 (LeakyReLU)      (None, 128)          0           ['dense_1[0][0]']                
+                                                                                                  
+ dense_2 (Dense)                (None, 128)          16512       ['leaky_re_lu_1[0][0]']          
+                                                                                                  
+ leaky_re_lu_2 (LeakyReLU)      (None, 128)          0           ['dense_2[0][0]']                
+                                                                                                  
+ dense_3 (Dense)                (None, 128)          16512       ['leaky_re_lu_2[0][0]']          
+                                                                                                  
+ leaky_re_lu_3 (LeakyReLU)      (None, 128)          0           ['dense_3[0][0]']                
+                                                                                                  
+ dense_4 (Dense)                (None, 128)          16512       ['leaky_re_lu_3[0][0]']          
+                                                                                                  
+ leaky_re_lu_4 (LeakyReLU)      (None, 128)          0           ['dense_4[0][0]']                
+                                                                                                  
+ dense_5 (Dense)                (None, 120)          15480       ['leaky_re_lu_4[0][0]']          
+                                                                                                  
+ dense_6 (Dense)                (None, 8)            1032        ['leaky_re_lu_4[0][0]']          
+                                                                                                  
+ concatenate (Concatenate)      (None, 128)          0           ['dense_5[0][0]',                
+                                                                  'dense_6[0][0]']                
+                                                                                                  
+==================================================================================================
+Total params: 98,560
+Trainable params: 98,560
+Non-trainable params: 0
+__________________________________________________________________________________________________
+None
+---SEARCH SPACE---
+Search space summary
+Default search space size: 8
+lr (Float)
+{'default': 0.0001, 'conditions': [], 'min_value': 0.0001, 'max_value': 0.001, 'step': None, 'sampling': 'log'}
+num_layers (Int)
+{'default': 4, 'conditions': [], 'min_value': 4, 'max_value': 12, 'step': 1, 'sampling': None}
+units_0 (Int)
+{'default': 128, 'conditions': [], 'min_value': 128, 'max_value': 1024, 'step': 128, 'sampling': None}
+units_1 (Int)
+{'default': 128, 'conditions': [], 'min_value': 128, 'max_value': 1024, 'step': 128, 'sampling': None}
+units_2 (Int)
+{'default': 128, 'conditions': [], 'min_value': 128, 'max_value': 1024, 'step': 128, 'sampling': None}
+units_3 (Int)
+{'default': 128, 'conditions': [], 'min_value': 128, 'max_value': 1024, 'step': 128, 'sampling': None}
+batch_size (Choice)
+{'default': 3072, 'conditions': [], 'values': [48, 96, 192, 384, 768, 1152, 1536, 2304, 3072], 'ordered': True}
+optimizer (Choice)
+{'default': 'Adam', 'conditions': [], 'values': ['Adam', 'RAdam', 'QHAdam'], 'ordered': False}
+
+Search: Running Trial #2
+
+Value             |Best Value So Far |Hyperparameter
+0.0008532         |?                 |lr
+5                 |?                 |num_layers
+896               |?                 |units_0
+896               |?                 |units_1
+1024              |?                 |units_2
+256               |?                 |units_3
+768               |?                 |batch_size
+RAdam             |?                 |optimizer
+
+Model: "trial_model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input (InputLayer)             [(None, 124)]        0           []                               
+                                                                                                  
+ dense (Dense)                  (None, 896)          112000      ['input[0][0]']                  
+                                                                                                  
+ leaky_re_lu (LeakyReLU)        (None, 896)          0           ['dense[0][0]']                  
+                                                                                                  
+ dense_1 (Dense)                (None, 896)          803712      ['leaky_re_lu[0][0]']            
+                                                                                                  
+ leaky_re_lu_1 (LeakyReLU)      (None, 896)          0           ['dense_1[0][0]']                
+                                                                                                  
+ dense_2 (Dense)                (None, 1024)         918528      ['leaky_re_lu_1[0][0]']          
+                                                                                                  
+ leaky_re_lu_2 (LeakyReLU)      (None, 1024)         0           ['dense_2[0][0]']                
+                                                                                                  
+ dense_3 (Dense)                (None, 256)          262400      ['leaky_re_lu_2[0][0]']          
+                                                                                                  
+ leaky_re_lu_3 (LeakyReLU)      (None, 256)          0           ['dense_3[0][0]']                
+                                                                                                  
+ dense_4 (Dense)                (None, 128)          32896       ['leaky_re_lu_3[0][0]']          
+                                                                                                  
+ leaky_re_lu_4 (LeakyReLU)      (None, 128)          0           ['dense_4[0][0]']                
+                                                                                                  
+ dense_5 (Dense)                (None, 128)          16512       ['leaky_re_lu_4[0][0]']          
+                                                                                                  
+ leaky_re_lu_5 (LeakyReLU)      (None, 128)          0           ['dense_5[0][0]']                
+                                                                                                  
+ dense_6 (Dense)                (None, 120)          15480       ['leaky_re_lu_5[0][0]']          
+                                                                                                  
+ dense_7 (Dense)                (None, 8)            1032        ['leaky_re_lu_5[0][0]']          
+                                                                                                  
+ concatenate (Concatenate)      (None, 128)          0           ['dense_6[0][0]',                
+                                                                  'dense_7[0][0]']                
+                                                                                                  
+==================================================================================================
+Total params: 2,162,560
+Trainable params: 2,162,560
+Non-trainable params: 0
+__________________________________________________________________________________________________
+None
+Epoch 1/12
+2140/2140 - 1582s - loss: 0.0056 - mse: 0.0056 - mae: 0.0307 - accuracy: 0.9622 - val_loss: 0.0043 - val_mse: 0.0043 - val_mae: 0.0264 - val_accuracy: 0.9731 - 1582s/epoch - 739ms/step
+Epoch 2/12
+2140/2140 - 609s - loss: 0.0042 - mse: 0.0042 - mae: 0.0256 - accuracy: 0.9743 - val_loss: 0.0041 - val_mse: 0.0041 - val_mae: 0.0249 - val_accuracy: 0.9765 - 609s/epoch - 284ms/step
+Epoch 3/12
+2140/2140 - 774s - loss: 0.0041 - mse: 0.0041 - mae: 0.0247 - accuracy: 0.9757 - val_loss: 0.0041 - val_mse: 0.0041 - val_mae: 0.0249 - val_accuracy: 0.9761 - 774s/epoch - 362ms/step
+Epoch 4/12
+2140/2140 - 717s - loss: 0.0040 - mse: 0.0040 - mae: 0.0241 - accuracy: 0.9766 - val_loss: 0.0040 - val_mse: 0.0040 - val_mae: 0.0239 - val_accuracy: 0.9773 - 717s/epoch - 335ms/step
+Epoch 5/12
+2140/2140 - 642s - loss: 0.0039 - mse: 0.0039 - mae: 0.0237 - accuracy: 0.9772 - val_loss: 0.0040 - val_mse: 0.0040 - val_mae: 0.0238 - val_accuracy: 0.9769 - 642s/epoch - 300ms/step
+Epoch 6/12
+2140/2140 - 602s - loss: 0.0039 - mse: 0.0039 - mae: 0.0233 - accuracy: 0.9775 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0233 - val_accuracy: 0.9772 - 602s/epoch - 281ms/step
+Epoch 7/12
+2140/2140 - 697s - loss: 0.0039 - mse: 0.0039 - mae: 0.0231 - accuracy: 0.9780 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0232 - val_accuracy: 0.9787 - 697s/epoch - 326ms/step
+Epoch 8/12
+2140/2140 - 695s - loss: 0.0038 - mse: 0.0038 - mae: 0.0230 - accuracy: 0.9784 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0233 - val_accuracy: 0.9780 - 695s/epoch - 325ms/step
+Epoch 9/12
+2140/2140 - 639s - loss: 0.0038 - mse: 0.0038 - mae: 0.0228 - accuracy: 0.9785 - val_loss: 0.0038 - val_mse: 0.0038 - val_mae: 0.0229 - val_accuracy: 0.9791 - 639s/epoch - 299ms/step
+Epoch 10/12
+2140/2140 - 651s - loss: 0.0038 - mse: 0.0038 - mae: 0.0227 - accuracy: 0.9787 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0232 - val_accuracy: 0.9786 - 651s/epoch - 304ms/step
+Epoch 11/12
+2140/2140 - 633s - loss: 0.0038 - mse: 0.0038 - mae: 0.0226 - accuracy: 0.9790 - val_loss: 0.0040 - val_mse: 0.0040 - val_mae: 0.0233 - val_accuracy: 0.9781 - 633s/epoch - 296ms/step
+Epoch 12/12
+2140/2140 - 622s - loss: 0.0037 - mse: 0.0037 - mae: 0.0225 - accuracy: 0.9791 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0230 - val_accuracy: 0.9778 - 622s/epoch - 291ms/step
+[2K[2KTrial 2 Complete [02h 31m 21s]
+val_loss: 0.0038354534190148115
+
+Best val_loss So Far: 0.0038354534190148115
+Total elapsed time: 02h 31m 21s
+
+Search: Running Trial #6
+
+Value             |Best Value So Far |Hyperparameter
+0.00035762        |0.0008532         |lr
+5                 |5                 |num_layers
+896               |896               |units_0
+640               |896               |units_1
+640               |1024              |units_2
+256               |256               |units_3
+896               |None              |units_4
+896               |None              |units_5
+384               |None              |units_6
+896               |None              |units_7
+640               |None              |units_8
+256               |None              |units_9
+1152              |768               |batch_size
+RAdam             |RAdam             |optimizer
+
+Model: "trial_model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input (InputLayer)             [(None, 124)]        0           []                               
+                                                                                                  
+ dense (Dense)                  (None, 896)          112000      ['input[0][0]']                  
+                                                                                                  
+ leaky_re_lu (LeakyReLU)        (None, 896)          0           ['dense[0][0]']                  
+                                                                                                  
+ dense_1 (Dense)                (None, 640)          574080      ['leaky_re_lu[0][0]']            
+                                                                                                  
+ leaky_re_lu_1 (LeakyReLU)      (None, 640)          0           ['dense_1[0][0]']                
+                                                                                                  
+ dense_2 (Dense)                (None, 640)          410240      ['leaky_re_lu_1[0][0]']          
+                                                                                                  
+ leaky_re_lu_2 (LeakyReLU)      (None, 640)          0           ['dense_2[0][0]']                
+                                                                                                  
+ dense_3 (Dense)                (None, 256)          164096      ['leaky_re_lu_2[0][0]']          
+                                                                                                  
+ leaky_re_lu_3 (LeakyReLU)      (None, 256)          0           ['dense_3[0][0]']                
+                                                                                                  
+ dense_4 (Dense)                (None, 896)          230272      ['leaky_re_lu_3[0][0]']          
+                                                                                                  
+ leaky_re_lu_4 (LeakyReLU)      (None, 896)          0           ['dense_4[0][0]']                
+                                                                                                  
+ dense_5 (Dense)                (None, 128)          114816      ['leaky_re_lu_4[0][0]']          
+                                                                                                  
+ leaky_re_lu_5 (LeakyReLU)      (None, 128)          0           ['dense_5[0][0]']                
+                                                                                                  
+ dense_6 (Dense)                (None, 120)          15480       ['leaky_re_lu_5[0][0]']          
+                                                                                                  
+ dense_7 (Dense)                (None, 8)            1032        ['leaky_re_lu_5[0][0]']          
+                                                                                                  
+ concatenate (Concatenate)      (None, 128)          0           ['dense_6[0][0]',                
+                                                                  'dense_7[0][0]']                
+                                                                                                  
+==================================================================================================
+Total params: 1,622,016
+Trainable params: 1,622,016
+Non-trainable params: 0
+__________________________________________________________________________________________________
+None
+Epoch 1/12
+2023-05-25 05:55:09.061065: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:390] Filling up shuffle buffer (this may take a while): 9985 of 11520
+2023-05-25 05:55:09.363563: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:415] Shuffle buffer filled.
+1427/1427 - 688s - loss: 0.0096 - mse: 0.0096 - mae: 0.0347 - accuracy: 0.9577 - val_loss: 0.0076 - val_mse: 0.0076 - val_mae: 0.0304 - val_accuracy: 0.9679 - 688s/epoch - 482ms/step
+Epoch 2/12
+1427/1427 - 647s - loss: 0.0072 - mse: 0.0072 - mae: 0.0280 - accuracy: 0.9676 - val_loss: 0.0071 - val_mse: 0.0071 - val_mae: 0.0276 - val_accuracy: 0.9692 - 647s/epoch - 454ms/step
+Epoch 3/12
+1427/1427 - 614s - loss: 0.0070 - mse: 0.0070 - mae: 0.0270 - accuracy: 0.9691 - val_loss: 0.0070 - val_mse: 0.0070 - val_mae: 0.0269 - val_accuracy: 0.9702 - 614s/epoch - 431ms/step
+Epoch 4/12
+1427/1427 - 622s - loss: 0.0069 - mse: 0.0069 - mae: 0.0263 - accuracy: 0.9699 - val_loss: 0.0070 - val_mse: 0.0070 - val_mae: 0.0267 - val_accuracy: 0.9702 - 622s/epoch - 436ms/step
+Epoch 5/12
+1427/1427 - 630s - loss: 0.0068 - mse: 0.0068 - mae: 0.0259 - accuracy: 0.9707 - val_loss: 0.0070 - val_mse: 0.0070 - val_mae: 0.0266 - val_accuracy: 0.9712 - 630s/epoch - 441ms/step
+Epoch 6/12
+1427/1427 - 656s - loss: 0.0068 - mse: 0.0068 - mae: 0.0256 - accuracy: 0.9711 - val_loss: 0.0068 - val_mse: 0.0068 - val_mae: 0.0260 - val_accuracy: 0.9721 - 656s/epoch - 460ms/step
+Epoch 7/12
+1427/1427 - 635s - loss: 0.0068 - mse: 0.0068 - mae: 0.0254 - accuracy: 0.9714 - val_loss: 0.0068 - val_mse: 0.0068 - val_mae: 0.0254 - val_accuracy: 0.9711 - 635s/epoch - 445ms/step
+Epoch 8/12
+1427/1427 - 619s - loss: 0.0067 - mse: 0.0067 - mae: 0.0251 - accuracy: 0.9716 - val_loss: 0.0068 - val_mse: 0.0068 - val_mae: 0.0252 - val_accuracy: 0.9721 - 619s/epoch - 434ms/step
+Epoch 9/12
+1427/1427 - 616s - loss: 0.0041 - mse: 0.0041 - mae: 0.0234 - accuracy: 0.9767 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0232 - val_accuracy: 0.9788 - 616s/epoch - 431ms/step
+Epoch 10/12
+1427/1427 - 619s - loss: 0.0038 - mse: 0.0038 - mae: 0.0229 - accuracy: 0.9788 - val_loss: 0.0039 - val_mse: 0.0039 - val_mae: 0.0233 - val_accuracy: 0.9786 - 619s/epoch - 434ms/step
+Epoch 11/12
+1427/1427 - 620s - loss: 0.0037 - mse: 0.0037 - mae: 0.0227 - accuracy: 0.9791 - val_loss: 0.0038 - val_mse: 0.0038 - val_mae: 0.0228 - val_accuracy: 0.9798 - 620s/epoch - 435ms/step
+Epoch 12/12
+1427/1427 - 622s - loss: 0.0037 - mse: 0.0037 - mae: 0.0226 - accuracy: 0.9794 - val_loss: 0.0038 - val_mse: 0.0038 - val_mae: 0.0227 - val_accuracy: 0.9796 - 622s/epoch - 436ms/step
+[2K[2KTrial 6 Complete [02h 10m 22s]
+val_loss: 0.0038025295361876488
+
+Best val_loss So Far: 0.0038025295361876488
+Total elapsed time: 04h 41m 42s
+
+Search: Running Trial #10
+
+Value             |Best Value So Far |Hyperparameter
+0.00017936        |0.00035762        |lr
+10                |5                 |num_layers
+640               |896               |units_0
+768               |640               |units_1
+640               |640               |units_2
+896               |256               |units_3
+896               |896               |units_4
+512               |896               |units_5
+640               |384               |units_6
+640               |896               |units_7
+640               |640               |units_8
+512               |256               |units_9
+384               |None              |units_10
+128               |None              |units_11
+3072              |1152              |batch_size
+RAdam             |RAdam             |optimizer
+
+Model: "trial_model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input (InputLayer)             [(None, 124)]        0           []                               
+                                                                                                  
+ dense (Dense)                  (None, 640)          80000       ['input[0][0]']                  
+                                                                                                  
+ leaky_re_lu (LeakyReLU)        (None, 640)          0           ['dense[0][0]']                  
+                                                                                                  
+ dense_1 (Dense)                (None, 768)          492288      ['leaky_re_lu[0][0]']            
+                                                                                                  
+ leaky_re_lu_1 (LeakyReLU)      (None, 768)          0           ['dense_1[0][0]']                
+                                                                                                  
+ dense_2 (Dense)                (None, 640)          492160      ['leaky_re_lu_1[0][0]']          
+                                                                                                  
+ leaky_re_lu_2 (LeakyReLU)      (None, 640)          0           ['dense_2[0][0]']                
+                                                                                                  
+ dense_3 (Dense)                (None, 896)          574336      ['leaky_re_lu_2[0][0]']          
+                                                                                                  
+ leaky_re_lu_3 (LeakyReLU)      (None, 896)          0           ['dense_3[0][0]']                
+                                                                                                  
+ dense_4 (Dense)                (None, 896)          803712      ['leaky_re_lu_3[0][0]']          
+                                                                                                  
+ leaky_re_lu_4 (LeakyReLU)      (None, 896)          0           ['dense_4[0][0]']                
+                                                                                                  
+ dense_5 (Dense)                (None, 512)          459264      ['leaky_re_lu_4[0][0]']          
+                                                                                                  
+ leaky_re_lu_5 (LeakyReLU)      (None, 512)          0           ['dense_5[0][0]']                
+                                                                                                  
+ dense_6 (Dense)                (None, 640)          328320      ['leaky_re_lu_5[0][0]']          
+                                                                                                  
+ leaky_re_lu_6 (LeakyReLU)      (None, 640)          0           ['dense_6[0][0]']                
+                                                                                                  
+ dense_7 (Dense)                (None, 640)          410240      ['leaky_re_lu_6[0][0]']          
+                                                                                                  
+ leaky_re_lu_7 (LeakyReLU)      (None, 640)          0           ['dense_7[0][0]']                
+                                                                                                  
+ dense_8 (Dense)                (None, 640)          410240      ['leaky_re_lu_7[0][0]']          
+                                                                                                  
+ leaky_re_lu_8 (LeakyReLU)      (None, 640)          0           ['dense_8[0][0]']                
+                                                                                                  
+ dense_9 (Dense)                (None, 512)          328192      ['leaky_re_lu_8[0][0]']          
+                                                                                                  
+ leaky_re_lu_9 (LeakyReLU)      (None, 512)          0           ['dense_9[0][0]']                
+                                                                                                  
+ dense_10 (Dense)               (None, 128)          65664       ['leaky_re_lu_9[0][0]']          
+                                                                                                  
+ leaky_re_lu_10 (LeakyReLU)     (None, 128)          0           ['dense_10[0][0]']               
+                                                                                                  
+ dense_11 (Dense)               (None, 120)          15480       ['leaky_re_lu_10[0][0]']         
+                                                                                                  
+ dense_12 (Dense)               (None, 8)            1032        ['leaky_re_lu_10[0][0]']         
+                                                                                                  
+ concatenate (Concatenate)      (None, 128)          0           ['dense_11[0][0]',               
+                                                                  'dense_12[0][0]']               
+                                                                                                  
+==================================================================================================
+Total params: 4,460,928
+Trainable params: 4,460,928
+Non-trainable params: 0
+__________________________________________________________________________________________________
+None
+Epoch 1/12
+2023-05-25 07:55:39.669909: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:390] Filling up shuffle buffer (this may take a while): 5761 of 11520
+2023-05-25 07:55:41.297911: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:415] Shuffle buffer filled.
+2023-05-25 08:05:52.164621: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:390] Filling up shuffle buffer (this may take a while): 5761 of 11520
+2023-05-25 08:05:53.613948: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:415] Shuffle buffer filled.
+535/535 - 693s - loss: 0.0113 - mse: 0.0113 - mae: 0.0431 - accuracy: 0.9345 - val_loss: 0.0059 - val_mse: 0.0059 - val_mae: 0.0315 - val_accuracy: 0.9652 - 693s/epoch - 1s/step
+Epoch 2/12
+2023-05-25 08:08:01.603366: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:390] Filling up shuffle buffer (this may take a while): 8065 of 11520
+2023-05-25 08:08:02.356541: I tensorflow/core/kernels/data/shuffle_dataset_op.cc:415] Shuffle buffer filled.
