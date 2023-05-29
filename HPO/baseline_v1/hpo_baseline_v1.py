@@ -70,7 +70,7 @@ class MyHyperModel(HyperModel):
         hp_batch_size = hp.Choice("batch_size",
                                   [  48,   96,  192,  384,  768, 1152, 1536, 2304, 3072],
                                   default=3072)
-        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam', 'QHAdam'], default='Adam')
+        hp_optimizer = hp.Choice("optimizer", ['Adam', 'RAdam'], default='Adam')
         
         # construct a model
         # input layer
@@ -112,8 +112,6 @@ class MyHyperModel(HyperModel):
             my_optimizer = keras.optimizers.Adam(learning_rate=clr)
         elif hp_optimizer == "RAdam":
             my_optimizer = tfa.optimizers.RectifiedAdam(learning_rate=clr)
-        elif hp_optimizer == "QHAdam":
-            my_optimizer = QHAdamOptimizer(learning_rate = clr, nu2 = 1.0, beta1 = .995, beta2 = .999)
                                        
         # compile
         model.compile(optimizer=my_optimizer, #optimizer=keras.optimizers.Adam(learning_rate=clr),

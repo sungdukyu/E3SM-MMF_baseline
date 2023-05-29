@@ -8,7 +8,7 @@ echo SLURMD_NODENAME $SLURMD_NODENAME
 
 source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load anaconda3
-conda activate tf2
+conda activate bair
 echo " "
 echo "Current conda env:"
 echo $CONDA_PREFIX
