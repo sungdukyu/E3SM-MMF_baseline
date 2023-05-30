@@ -191,13 +191,13 @@ def main():
         'shuffle': True,
         'callbacks': [callbacks.EarlyStopping('val_loss', patience = 10),
                       callbacks.TensorBoard(log_dir = 'logs/bair/logs_tensorboard', histogram_freq = 1),
-                      callbacks.ModelCheckpoint(filepath=filepath_checkpoint,
-                                                            verbose = 1,
-                                                            save_weights_only=False,
-                                                            monitor='val_mse',
-                                                            mode='min',
-                                                            save_best_only=True),
-                      callbacks.CSVLogger(filepath_csv, separator=",", append=True),
+                    #   callbacks.ModelCheckpoint(filepath=filepath_checkpoint,
+                    #                                         verbose = 1,
+                    #                                         save_weights_only=False,
+                    #                                         monitor='val_mse',
+                    #                                         mode='min',
+                    #                                         save_best_only=True),
+                    #   callbacks.CSVLogger(filepath_csv, separator=",", append=True),
                       callbacks.BackupAndRestore('results/bair_backup')]
     }
     # print("---SEARCH SPACE---")
