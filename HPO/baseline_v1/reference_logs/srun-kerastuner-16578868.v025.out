@@ -1,0 +1,38 @@
+--- run-dynamic.sh ---
+--- run-dynamic.sh ---
+SLURM_LOCALID 1
+SLURMD_NODENAME v025
+--- run-dynamic.sh ---
+SLURM_LOCALID 3
+SLURMD_NODENAME v025
+--- run-dynamic.sh ---
+SLURM_LOCALID 2
+SLURMD_NODENAME v025
+--- run-dynamic.sh ---
+SLURM_LOCALID 4
+SLURMD_NODENAME v025
+SLURM_LOCALID 0
+SLURMD_NODENAME v025
+ 
+Current conda env:
+/jet/home/jlin96/.conda/envs/bair
+ 
+ 
+Current conda env:
+ 
+Current conda env:
+/jet/home/jlin96/.conda/envs/bair
+ 
+/jet/home/jlin96/.conda/envs/bair
+ 
+ 
+Current conda env:
+/jet/home/jlin96/.conda/envs/bair
+ 
+ 
+Current conda env:
+/jet/home/jlin96/.conda/envs/bair
+ 
+srun: Job step aborted: Waiting up to 302 seconds for job step to finish.
+slurmstepd: error: *** STEP 16578868.0 ON v025 CANCELLED AT 2023-05-29T23:43:31 DUE TO TIME LIMIT ***
+slurmstepd: error: *** JOB 16578868 ON v025 CANCELLED AT 2023-05-29T23:43:31 DUE TO TIME LIMIT ***

@@ -12,11 +12,11 @@
 #SBATCH -t 0:25:00
 
 
-[[ -d ./logs/$2 ]] || mkdir ./logs/$2
+[[ -d ./logs/bair ]] || mkdir ./logs/bair
 
 # $1: python script name
 # $2: Keras Tuner "project name"
 source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load anaconda3
 conda activate bair
-srun --mpi=pmi2 --wait=0 bash run-dynamic.gpu-shared.baseline_v1.sh $1 $2
+srun --mpi=pmi2 --wait=0 bash run-dynamic.gpu-shared.baseline_v1.sh $1

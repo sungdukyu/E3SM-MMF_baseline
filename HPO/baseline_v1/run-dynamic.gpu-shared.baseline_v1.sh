@@ -16,5 +16,4 @@ echo " "
 
 # python_script=production-tuning.gpu-shared.py
 python_script=$1
-proj_name=$2
-python ${python_script} -p ${proj_name} > logs/${proj_name}/keras-tuner-dynamic-shared-$SLURM_JOBID-$SLURMD_NODENAME-$SLURM_LOCALID.log 2>&1
+python ${python_script} > logs/bair/keras-tuner-dynamic-shared-$SLURM_JOBID-$SLURMD_NODENAME-$SLURM_LOCALID.log 2>&1
