@@ -11,11 +11,20 @@ from keras_tuner import RandomSearch
 import os
 import tensorflow_addons as tfa
 # from qhoptim.tf import QHAdamOptimizer
+import sys
 import argparse
 import glob
 import random
 
+
 def set_environment(num_gpus_per_node=4, oracle_port = "8000"):
+    '''
+    This function sets up the environment variables for the Keras Tuner Oracle.
+    It should be called at the beginning of the main function.
+    The default oracle port is 8000, but 8000 is also very popular.
+    When running into GPU issues, scanning for alternative ports is recommended.
+    '''
+
     print('<< set_environment START >>')
     num_gpus_per_node = str(num_gpus_per_node)
     nodename = os.environ['SLURMD_NODENAME']
@@ -45,9 +54,31 @@ def set_environment(num_gpus_per_node=4, oracle_port = "8000"):
     #print(os.environ)
     print('<< set_environment END >>')
 
+def build_model(hp):
+    '''
+    This function builds the model for the Keras Tuner.
+    Choose the hyperparameters to scan over and your preferred architecture in this function.
+    INPUTS (124 features per sample):
+    state_t: 60 levels (lower index = higher in atmosphere), units: K, air temperature
+    state_q0001: 60 levels (lower index = higher in atmosphere), units: kg/kg, specific humidity
+    state_ps: scalar, units: Pa, surface pressure
+    pbuf_SOLIN: scalar, units: W/m2, solar insolation
+    pbuf_LHFLX: scalar, units: W/m2, surface latent heat flux
+    pbuf_SHFLX: scalar, units: W/m2, surface sensible heat flux
 
 
-def build_model(hp):        
+    OUTPUTS (128 features per sample):
+    ptend_t: 60 levels (lower index = higher in atmosphere), units: K/s, tendency of air temperature
+    ptend_q0001: 60 levels (lower index = higher in atmosphere), units: kg/kg/s, tendency of specific humidity
+    cam_out_NETSW: scalar, units: W/m2, net shortwave flux at surface
+    cam_out_FLWDS: scalar, units: W/m2, downward longwave flux at surface
+    cam_out_PRECSC: scalar, units: m/s, snow rate (liquid water equivalent)
+    cam_out_PRECC: scalar, units: m/s, rain rate
+    cam_out_SOLS: scalar, units: W/m2, downward visible direct solar flux to surface
+    cam_out_SOLL: scalar, units: W/m2, downward near-infrared direct solar flux to surface
+    cam_out_SOLSD: scalar, units: W/m2, downward visible diffuse solar flux to surface
+    cam_out_SOLLD: scalar, units: W/m2, downward near-infrared diffuse solar flux to surface
+    '''        
     # hyperparameters to be tuned:
     n_layers = hp.Int("num_layers", 4, 12, default=4)
     hp_batch_size = hp.Choice("batch_size",
@@ -113,16 +144,16 @@ def main():
     if os.environ["KERASTUNER_TUNER_ID"] != "chief":
         with open(training_data_path + 'train_input.npy', 'rb') as f:
             train_input = np.load(f)
-
+            # train_input.shape returns (10091520, 124)
         with open(training_data_path + 'train_target.npy', 'rb') as f:
             train_target = np.load(f)
-
+            # train_target.shape returns (10091520, 128)
         with open(training_data_path + 'val_input.npy', 'rb') as f:
             val_input = np.load(f)
-
+            # val_input.shape returns (1441920, 124)
         with open(training_data_path + 'val_target.npy', 'rb') as f:
             val_target = np.load(f)
-
+            # val_target.shape returns (1441920, 128)
     tuner = kt.RandomSearch(
         hypermodel = build_model,
         objective = 'val_loss',
@@ -137,8 +168,8 @@ def main():
     #     return "_".join(list(identifiers))
     # model_id = make_model_id(os.environ["KERASTUNER_TUNER_ID"])
     
-    # filepath_checkpoint = 'results/bair/best_models/'
-    # filepath_csv = 'logs/bair/training_csvs/'
+    filepath_checkpoint = 'results/bair/best_models/'
+    filepath_csv = 'logs/bair/training_csvs/'
 
     # early_stopping = callbacks.EarlyStopping('val_loss', patience = 10)
     # tboard_callback = callbacks.TensorBoard(log_dir = 'logs/bair/logs_tensorboard', histogram_freq = 1)
@@ -155,18 +186,19 @@ def main():
     #                 csv_callback]
     
     kwargs = {
-        'batch_size': 5000,
         'epochs':100,
         'verbose':2,
         'shuffle': True,
         'callbacks': [callbacks.EarlyStopping('val_loss', patience = 10),
-                      callbacks.TensorBoard(log_dir = 'logs/bair/logs_tensorboard', histogram_freq = 1)]#,
-                    #   callbacks.ModelCheckpoint(filepath=filepath_checkpoint,
-                    #                                         save_weights_only=False,
-                    #                                         monitor='val_mse',
-                    #                                         mode='min',
-                    #                                         save_best_only=True),
-                    #   callbacks.CSVLogger(filepath_csv + self.trial.trial_id + ".csv", separator=",", append=True)
+                      callbacks.TensorBoard(log_dir = 'logs/bair/logs_tensorboard', histogram_freq = 1),
+                      callbacks.ModelCheckpoint(filepath=filepath_checkpoint,
+                                                            verbose = 1,
+                                                            save_weights_only=False,
+                                                            monitor='val_mse',
+                                                            mode='min',
+                                                            save_best_only=True),
+                      callbacks.CSVLogger(filepath_csv, separator=",", append=True),
+                      callbacks.BackupAndRestore('results/bair_backup')]
     }
     # print("---SEARCH SPACE---")
     # tuner.search_space_summary()
