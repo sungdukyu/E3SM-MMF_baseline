@@ -128,16 +128,16 @@ def hyperparameter_tuning(sweep, train_and_eval, metric=None, runs=10, save_dir=
     record = [[r[i] for i in order] for r in record]
 
     metrics = record[0][0].keys()
-    if save_dir.contains('cvae'):
+    if 'cvae' in save_dir:
         interests = ['layers', 'latent_dims', 'hidden_dims', 'beta', 'lr', 'weight_decay']
     else:
         interests = ['layers', 'hidden_dims', 'lr', 'gamma']
-    print('\n    %s | %s' % (' '.join(['%8s' % x for x in metrics]), ' '.join(['%11s' % x for x in interests])))
-    print('\n'.join(['[%d] %s | %s' % (
-        id, ' '.join(['%8.4g' % v for v in record[0][i].values()]),
-        ' '.join(['%11.4g' % (record[2][i][k] if k in record[2][i].keys() else record[2][i]['model_params'][k])
-                  for k in interests]))
-        for i, id in enumerate(record[1])]))
+    print('\n     %s | %s' % (' '.join(['%8s' % x for x in metrics]), ' '.join(['%11s' % x for x in interests])))
+    for i, id in enumerate(record[1]):
+        print('[%2d] %s | %s' % (
+            id, ' '.join(['%8.4g' % v for v in record[0][i].values()]),
+            ' '.join(['%11.4g' % (record[2][i][k] if k in record[2][i].keys() else record[2][i]['model_params'][k])
+                      for k in interests])))
     with open(save_dir + 'records.pickle', 'wb') as f:
         pickle.dump(record, f)
 

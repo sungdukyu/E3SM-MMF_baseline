@@ -1,3 +1,4 @@
+import pickle
 from functools import partial
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -9,6 +10,7 @@ from tools import progress, hyperparameter_tuning
 sns.set_theme(style='whitegrid')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
 class MLP(torch.nn.Module):
     """
     MLP Estimator for mean and log precision
@@ -18,19 +20,19 @@ class MLP(torch.nn.Module):
         self.linears = []
         for i in range(layers):
             self.linears += [torch.nn.Linear(in_dims if i == 0 else hidden_dims, hidden_dims)]
-            self.add_module('linear%d' % i, self.linears_mean[-1])
+            self.add_module('linear%d' % i, self.linears[-1])
         self.final_linear = torch.nn.Linear(hidden_dims, out_dims)
 
     def forward(self, x):
         torch.flatten(x, start_dim=1)
         for linear in self.linears:
             x = torch.nn.functional.relu(linear(x))
-        x = self.final_linear_mean(x)
+        x = self.final_linear(x)
         return x
 
 
 class Regressor(torch.nn.Module):
-    def __init__(self, in_dims, out_dims, hidden_dims=512, layers=1):
+    def __init__(self, in_dims=124, out_dims=128, hidden_dims=512, layers=1):
         """
         Heteroskedastic Regression model, computing MLE estimates of mean and precision via regularized MLPs
 
@@ -65,7 +67,7 @@ class Regressor(torch.nn.Module):
         y = mu + self.N.sample(mu.shape) / torch.exp(logprec)
         return y
 
-    def trainer(self, data, epochs=20, save="models/vae.cp", plot=True, loss_type='mse',
+    def trainer(self, data, epochs=20, save="models/vae.cp", plot=True, loss_type='mle',
                 optimizer='adam', lr=0.0001, gamma=0.01, rho=None):
         """
         Train the Heteroskedastic Regression model
@@ -85,7 +87,7 @@ class Regressor(torch.nn.Module):
         # Training parameters
         # Regularization, reduce to a line search
         gamma = gamma
-        rho = rho if rho is None else gamma
+        rho = rho if rho is not None else 1 - gamma
         # L2 weight decay
         alpha = (1 - rho) / rho * gamma
         beta = (1 - rho) / rho * (1 - gamma)
@@ -171,7 +173,7 @@ def eval(model, data, metrics, plot=True):
                 elif m == 'mae':
                     ths_res = torch.abs(y - mu).sum(axis=0)
                 elif m == 'mle':
-                    ths_res = (prec * (y - mu) ** 2 - logprec).sum()
+                    ths_res = (prec * (y - mu) ** 2 - logprec).sum(axis=0)
                 else:
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
@@ -209,6 +211,15 @@ def train_and_eval(train_params, metrics, save_path=None):
     return eval(model, data_val, metrics)
 
 
+def load_eval(save_dir, metrics, i=0):
+    with open(save_dir + 'records.pickle', 'rb') as f:
+        record = pickle.load(f)
+        id, train_params = record[1][i], record[2][i]
+        _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
+        model = train(train_params, load_path=save_dir + '%d.cp' % id)
+        eval(model, data_val, metrics)
+
+
 if __name__ == '__main__':
     sweep = {
         'model_params': {
@@ -230,18 +241,18 @@ if __name__ == '__main__':
         },
         'gamma': {
             'max': 1,
-            'min': 0.0001,
+            'min': 0.13,
             'distribution': 'log_uniform'
         },
-        'loss_type': 'mse',
+        'loss_type': 'mle',
         'batch_size': {
             'values': [1024, 2048, 4096, 8192, 16384],
         }
     }
-    metrics = ['mse', 'mae']
+    metrics = ['mse', 'mae', 'mle']
 
     hyperparameter_tuning(
-        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=3, save_dir='models/hetreg_sweep/')
+        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=100, save_dir='models/hetreg_sweep/')
 
     # train_params = {
     #     'model_params': {
@@ -258,3 +269,5 @@ if __name__ == '__main__':
     #     'batch_size': 4096,
     # }
     # train_and_eval(train_params, data_train, data_val, metrics, save_path='models/test.cp')
+
+    # load_eval('models/hetreg_sweep_old/', metrics)

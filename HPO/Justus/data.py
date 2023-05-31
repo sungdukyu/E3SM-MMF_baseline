@@ -17,7 +17,7 @@ DATA_PATH_NPY = 'data/'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Save loaded data globally
-datasets = None
+datasets = [None, None]
 
 
 class NumpyData(Dataset):
@@ -49,14 +49,18 @@ class NumpyData(Dataset):
         return DataLoader(self, collate_fn=lambda x: x, **kwargs)
 
 
-def get_data(**kwargs):
+def get_data(val_only=False, **kwargs):
 
     global datasets
-    if datasets is None:
-        to_gpu = lambda x: x.to(device)
+    to_gpu = lambda x: x
+    # to_gpu = lambda x: x.to(device)
+    if datasets[0] is None and not val_only:
         datasets = [NumpyData(*[DATA_PATH_NPY + '%s_%s.npy' % (t, s) for s in ['input', 'target']],
                               process_x=to_gpu, process_y=to_gpu) for t in ['train', 'val']]
-    return [d.dataloader(**kwargs) for d in datasets]
+    elif datasets[1] is None and val_only:
+        datasets[1] = NumpyData(*[DATA_PATH_NPY + 'val_%s.npy' % s for s in ['input', 'target']],
+                                process_x=to_gpu, process_y=to_gpu)
+    return [d.dataloader(**kwargs) if d is not None else None for d in datasets]
 
 
 if __name__ == "__main__":
