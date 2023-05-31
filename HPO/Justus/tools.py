@@ -1,5 +1,9 @@
 import sys
 import time
+import random
+import numpy as np
+from copy import deepcopy
+import pickle
 
 
 def progress(iterable, text=None, inner=None, timed=None):
@@ -32,7 +36,7 @@ def progress(iterable, text=None, inner=None, timed=None):
                 perc = (i + 1) / len(iterable)
                 inv_perc = len(iterable) / (i + 0.1)
                 sys.stdout.write("\r%s[%.1f %%] - %d / %d - %.1fs [TBD: %.1fs]" %
-                                 (text, 100 * perc, i + 1, len(iterable), now-start, (now-start) * inv_perc))
+                                 (text, 100 * perc, i + 1, len(iterable), now - start, (now - start) * (inv_perc - 1)))
                 sys.stdout.flush()
             # Call events
             if timed is not None:
@@ -49,7 +53,7 @@ def progress(iterable, text=None, inner=None, timed=None):
                     inv_perc = (len(iterable) * len(inner)) / (i * len(inner) + j + 0.1)
                     sys.stdout.write("\r%s[%.1f %%] - %d / %d (%d / %d) - %.1fs [TBD: %.1fs]" %
                                      (text, 100 * perc, i + 1, len(iterable), j + 1, len(inner),
-                                      now-start, (now-start) * inv_perc))
+                                      now - start, (now - start) * (inv_perc - 1)))
                     sys.stdout.flush()
                 # Call events
                 if timed is not None:
@@ -59,3 +63,84 @@ def progress(iterable, text=None, inner=None, timed=None):
     if timed is not None:
         handle_events(force=True)
     print()
+
+
+def pprint(dict_, k='Parameters', level=0):
+    """
+    Recursively pretty-print a dict
+    """
+    if not type(dict_) == dict:
+        print(4 * level * ' ' + '%s: %s' % (k, dict_))
+        return
+    print(4 * level * ' ' + '%s: {' % k)
+    [pprint(v, k=k, level=level + 1) for k, v in dict_.items()]
+    print(4 * level * ' ' + '}')
+
+
+def sample_from_sweep(sweep):
+    """
+    Create a sample from a sweep configuration.
+    Supports continuous {min, max, distribution} and discrete {values} values.
+    Defined recursively to support arbitrary depth of the configuration dict.
+    """
+    # Fixed value
+    if not type(sweep) == dict:
+        return sweep
+    # Sample continuous value:
+    if 'distribution' in sweep.keys():
+        if sweep['distribution'] == 'log_uniform':
+            return np.exp(np.random.uniform(low=np.log(sweep['min']), high=np.log(sweep['max'])))
+        elif sweep['distribution'] == 'uniform':
+            return np.random.uniform(low=sweep['min'], high=sweep['max'])
+        else:
+            raise ValueError('Unknown distribution')
+    # Sample discrete value:
+    elif 'values' in sweep.keys():
+        return random.choice(sweep['values'])
+    # Recurse
+    return {k: sample_from_sweep(v) for k, v in sweep.items()}
+
+
+def hyperparameter_tuning(sweep, train_and_eval, metric=None, runs=10, save_dir=None):
+    """
+    Rudimentary version of local hyperparameter tuning, with syntax similar to Weights and Biases.
+    Supports continuous {min, max, distribution} and discrete {values} values.
+    Does a random search over all parameters, prints metrics, and saves trained models / configuration.
+
+    Inputs:
+    -------
+    sweep - [nested dict] the sweep configuration file,
+            see 'parameters' at https://docs.wandb.ai/guides/sweeps/define-sweep-configuration
+    train_and_eval - [callable] takes training parameters / save_path returns a dict with entries {metric: value}
+    metric - [str] (optional) metric to minimize, i.e. to sort the runs by
+    runs - [int] number of runs
+    save_dir - [str] (optional) where to save the trained models
+    """
+    record = [[], [], []]
+    for i in range(runs):
+        train_params = sample_from_sweep(sweep)
+        pprint(train_params)
+        record[1] += [i]
+        record[2] += [deepcopy(train_params)]
+        result = train_and_eval(train_params, save_path=save_dir + '%d.cp' % i if save_dir is not None else None)
+        record[0] += [result]
+    order = sorted(record[1], key=lambda i: record[0][i][metric])
+    record = [[r[i] for i in order] for r in record]
+
+    metrics = record[0][0].keys()
+    if save_dir.contains('cvae'):
+        interests = ['layers', 'latent_dims', 'hidden_dims', 'beta', 'lr', 'weight_decay']
+    else:
+        interests = ['layers', 'hidden_dims', 'lr', 'gamma']
+    print('\n    %s | %s' % (' '.join(['%8s' % x for x in metrics]), ' '.join(['%11s' % x for x in interests])))
+    print('\n'.join(['[%d] %s | %s' % (
+        id, ' '.join(['%8.4g' % v for v in record[0][i].values()]),
+        ' '.join(['%11.4g' % (record[2][i][k] if k in record[2][i].keys() else record[2][i]['model_params'][k])
+                  for k in interests]))
+        for i, id in enumerate(record[1])]))
+    with open(save_dir + 'records.pickle', 'wb') as f:
+        pickle.dump(record, f)
+
+    # with open('models/cvae_sweep/records.pickle', 'rb') as f:
+    #     record = pickle.load(f)
+    #     pprint(record[2][0])

@@ -9,11 +9,15 @@ Droplet distribution simulation data provided by Jerry Lin, available on PSC's B
 E3SM-MMF.mlo.{%4d}-{%2d}-{%2d}-{%5d}.nc - [bins(33), time(1), X(640), Y(640), Z(75)]
     - mixing ratio, netCDF4, ~196GB (49 * ~4B) (* 6+ metrological cases, e.g. 'atex', 'dycoms')
 
-train_input.npy / train_target.npy [n(10.091.520), vars(128)] -> [..., vars(128)]
-val_input.npy / val_target.npy [n(1.441.920), vars(128)] -> [..., vars(128)]
+train_input.npy / train_target.npy [n(10.091.520), vars(124)] -> [..., vars(128)]
+val_input.npy / val_target.npy [n(1.441.920), vars(124)] -> [..., vars(128)]
 """
 
-DATA_PATH_NPY = 'Data/'
+DATA_PATH_NPY = 'data/'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# Save loaded data globally
+datasets = None
 
 
 class NumpyData(Dataset):
@@ -26,7 +30,7 @@ class NumpyData(Dataset):
             self.datax = process_x(self.datax)
         self.datay = torch.from_numpy(np.load(dir_y))
         if process_y is not None:
-            self.datay = process_y(self.datax)
+            self.datay = process_y(self.datay)
 
     def __len__(self):
         return self.datax.shape[0]
@@ -45,8 +49,18 @@ class NumpyData(Dataset):
         return DataLoader(self, collate_fn=lambda x: x, **kwargs)
 
 
+def get_data(**kwargs):
+
+    global datasets
+    if datasets is None:
+        to_gpu = lambda x: x.to(device)
+        datasets = [NumpyData(*[DATA_PATH_NPY + '%s_%s.npy' % (t, s) for s in ['input', 'target']],
+                              process_x=to_gpu, process_y=to_gpu) for t in ['train', 'val']]
+    return [d.dataloader(**kwargs) for d in datasets]
+
+
 if __name__ == "__main__":
-    # Load validation
+    # Load validation data
     import time
     data = NumpyData(DATA_PATH_NPY + 'val_input.npy', DATA_PATH_NPY + 'val_target.npy').dataloader(batch_size=4096)
     batch = next(iter(data))
