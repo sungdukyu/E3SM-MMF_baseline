@@ -65,7 +65,7 @@ class Regressor(torch.nn.Module):
         x - [BxN array] label
         """
         mu, logprec = self.forward(x)
-        y = mu + self.N.sample(mu.shape) / torch.exp(logprec)
+        y = mu + self.N.sample(mu.shape) / torch.exp(logprec)**(0.5)
         return y
 
     def trainer(self, data, epochs=20, save="models/vae.cp", plot=True, loss_type='mle',
@@ -133,8 +133,8 @@ class Regressor(torch.nn.Module):
             plt.savefig('results/tmp_loss.png')
             plt.figure()
             plt.plot((y[0:500] - mu[0:500]).detach().cpu().numpy().T, c="C0", alpha=1/255)
-            plt.plot(- np.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
-            plt.plot(np.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
+            plt.plot(- torch.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
+            plt.plot(torch.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
             plt.tight_layout()
             plt.savefig('results/tmp_last_batch.png')
             # plt.show()
@@ -176,12 +176,22 @@ def eval(model, data, metrics, sample=None, plot=True):
                     ths_res = (prec * (y - mu) ** 2 - logprec).sum(axis=0)
                 elif m == 'crps':
                     # Analytically
-                    w = (y - mu) * prec**0.5
-                    ths_res = (w * (2 * norm().cdf(w) - 1) + 2 & norm().pdf(w) - np.pi**(-0.5)) / prec**0.5
+                    w = ((y - mu) * prec**0.5).cpu()
+                    lk = (w * (2 * norm().cdf(w) - 1) + 2 * norm().pdf(w) - np.pi**(-0.5)) / prec.cpu()**0.5
+                    ths_res = lk.mean(axis=0)
                 elif m == 'crps_ecdf':
                     # Using the ecdf
-                    y_hats = torch.cat([sample(x) for _ in range(100)])
-
+                    n = 20
+                    y_hats = torch.stack([sample(x) for _ in range(n)], 2).sort(dim=-1)[0]
+                    # E[Y - y]
+                    mae = torch.abs(y[..., None] - y_hats).mean(axis=(0, -1))
+                    # E[Y - Y'] = sum_i sum_j |Y_i - Y_j| / n^2
+                    diff = y_hats[..., 1:] - y_hats[..., :-1]
+                    count = torch.arange(1, n, device=device) * torch.arange(n - 1, 0, -1, device=device)
+                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / (n * (n-1))
+                elif m == 'std':
+                    # Test sampler
+                    ths_res = torch.stack([sample(x) for _ in range(n)], 2).std(dim=-1).mean(axis=0)
                 else:
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
@@ -216,7 +226,7 @@ def train_and_eval(train_params, metrics, save_path=None):
     data_train, data_val = get_data(batch_size=train_params.pop('batch_size'))
     model, sample = train(train_params, data_train, load_path=None, save_path=save_path)
     # eval(model, data_train, metrics)
-    return eval(model, data_val, metrics, smaple=sample)
+    return eval(model, data_val, metrics, sample=sample)
 
 
 def load_eval(save_dir, metrics, i=0):
@@ -238,7 +248,7 @@ if __name__ == '__main__':
                 'values': [1, 2, 3, 4]
             }
         },
-        'epochs': 5,
+        'epochs': 10,
         'optimizer': {
             'values': ['adam', 'sgd']
         },
@@ -259,8 +269,8 @@ if __name__ == '__main__':
     }
     metrics = ['mse', 'mae', 'mle', 'crps', 'crps_ecdf']
 
-    hyperparameter_tuning(
-        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=100, save_dir='models/hetreg_sweep/')
+    # hyperparameter_tuning(
+    #     sweep, partial(train_and_eval, metrics=metrics), 'crps', runs=100, save_dir='models/hetreg_sweep2/')
 
     # train_params = {
     #     'model_params': {
@@ -278,4 +288,4 @@ if __name__ == '__main__':
     # }
     # train_and_eval(train_params, data_train, data_val, metrics, save_path='models/test.cp')
 
-    # load_eval('models/hetreg_sweep_old/', metrics)
+    load_eval('models/hetreg_sweep/', metrics)
