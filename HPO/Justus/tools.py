@@ -119,7 +119,8 @@ def hyperparameter_tuning(sweep, train_and_eval, metric=None, runs=10, save_dir=
     record = [[], [], []]
     for i in range(runs):
         train_params = sample_from_sweep(sweep)
-        pprint(train_params)
+        print('Run %d:' % i)
+        pprint(train_params) 
         record[1] += [i]
         record[2] += [deepcopy(train_params)]
         result = train_and_eval(train_params, save_path=save_dir + '%d.cp' % i if save_dir is not None else None)

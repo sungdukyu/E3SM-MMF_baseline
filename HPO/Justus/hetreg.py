@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from data import get_data
 from tools import progress, hyperparameter_tuning
+from scipy.stats import norm
 
 sns.set_theme(style='whitegrid')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -132,8 +133,8 @@ class Regressor(torch.nn.Module):
             plt.savefig('results/tmp_loss.png')
             plt.figure()
             plt.plot((y[0:500] - mu[0:500]).detach().cpu().numpy().T, c="C0", alpha=1/255)
-            plt.plot((- 1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
-            plt.plot((1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
+            plt.plot(- np.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
+            plt.plot(np.sqrt(1 / prec).detach().cpu().numpy().T, c="C1", alpha=1/255)
             plt.tight_layout()
             plt.savefig('results/tmp_last_batch.png')
             # plt.show()
@@ -150,11 +151,10 @@ def train(train_params, data=None, load_path=None, save_path=None):
     if data is not None:
         vae.trainer(data, save=save_path, **train_params)
     vae.eval()
-    return vae.forward
-    # return vae.sample
+    return vae.forward, vae.sample
 
 
-def eval(model, data, metrics, plot=True):
+def eval(model, data, metrics, sample=None, plot=True):
     """
     Evaluate model on the validation data, returns a dict with entries {metric: value}
     """
@@ -174,6 +174,14 @@ def eval(model, data, metrics, plot=True):
                     ths_res = torch.abs(y - mu).sum(axis=0)
                 elif m == 'mle':
                     ths_res = (prec * (y - mu) ** 2 - logprec).sum(axis=0)
+                elif m == 'crps':
+                    # Analytically
+                    w = (y - mu) * prec**0.5
+                    ths_res = (w * (2 * norm().cdf(w) - 1) + 2 & norm().pdf(w) - np.pi**(-0.5)) / prec**0.5
+                elif m == 'crps_ecdf':
+                    # Using the ecdf
+                    y_hats = torch.cat([sample(x) for _ in range(100)])
+
                 else:
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
@@ -206,9 +214,9 @@ def train_and_eval(train_params, metrics, save_path=None):
     save_path - [str] file path to save trained model to
     """
     data_train, data_val = get_data(batch_size=train_params.pop('batch_size'))
-    model = train(train_params, data_train, load_path=None, save_path=save_path)
+    model, sample = train(train_params, data_train, load_path=None, save_path=save_path)
     # eval(model, data_train, metrics)
-    return eval(model, data_val, metrics)
+    return eval(model, data_val, metrics, smaple=sample)
 
 
 def load_eval(save_dir, metrics, i=0):
@@ -216,8 +224,8 @@ def load_eval(save_dir, metrics, i=0):
         record = pickle.load(f)
         id, train_params = record[1][i], record[2][i]
         _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
-        model = train(train_params, load_path=save_dir + '%d.cp' % id)
-        eval(model, data_val, metrics)
+        model, sample = train(train_params, load_path=save_dir + '%d.cp' % id)
+        eval(model, data_val, metrics, sample=sample)
 
 
 if __name__ == '__main__':
@@ -249,7 +257,7 @@ if __name__ == '__main__':
             'values': [1024, 2048, 4096, 8192, 16384],
         }
     }
-    metrics = ['mse', 'mae', 'mle']
+    metrics = ['mse', 'mae', 'mle', 'crps', 'crps_ecdf']
 
     hyperparameter_tuning(
         sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=100, save_dir='models/hetreg_sweep/')

@@ -1,3 +1,4 @@
+import pickle
 from functools import partial
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -179,11 +180,10 @@ def train(train_params, data=None, load_path=None, save_path=None):
     if data is not None:
         vae.trainer(data, save=save_path, **train_params)
     vae.eval()
-    return vae.sample
-    # return partial(vae.sample, random=False)
+    return partial(vae.sample, random=False), vae.sample
 
 
-def eval(model, data, metrics, plot=True):
+def eval(model, data, metrics, sample=None, plot=True):
     """
     Evaluate model on the validation data, returns a dict with entries {metric: value}
     """
@@ -200,6 +200,19 @@ def eval(model, data, metrics, plot=True):
                     ths_res = ((y - y_hat) ** 2).sum(axis=0)
                 elif m == 'mae':
                     ths_res = torch.abs(y - y_hat).sum(axis=0)
+                elif m == 'crps_ecdf':
+                    n = 20
+                    y_hats = torch.stack([sample(x) for _ in range(n)], 2).sort(dim=-1)[0]
+                    # E[Y - y]
+                    mae = torch.abs(y[..., None] - y_hats).mean(axis=(0, -1))
+                    # E[Y - Y'] = sum_i sum_j |Y_i - Y_j| / n^2
+                    diff = y_hats[..., 1:] - y_hats[..., :-1]
+                    count = torch.arange(1, n, device=device) * torch.arange(n - 1, 0, -1, device=device)
+                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / n**2
+                elif m == 'std':
+                    # Test sampler
+                    n = 20
+                    ths_res = torch.stack([sample(x) for _ in range(n)], 2).std(dim=-1).mean(axis=0)
                 else:
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
@@ -211,6 +224,7 @@ def eval(model, data, metrics, plot=True):
             plt.bar(range(len(res)), res.cpu())
             plt.semilogy()
             plt.ylabel(m)
+            plt.title('%s: %.4g' % (m, res.mean()))
             plt.tight_layout()
         results[m] = results[m].mean().cpu().numpy()
         print('%s: %.4g' % (m, results[m]))
@@ -232,9 +246,18 @@ def train_and_eval(train_params, metrics, save_path=None):
     save_path - [str] file path to save trained model to
     """
     data_train, data_val = get_data(batch_size=train_params.pop('batch_size'))
-    model = train(train_params, data_train, load_path=None, save_path=save_path)
+    model, sample = train(train_params, data_train, load_path=None, save_path=save_path)
     # eval(model, data_train, metrics)
-    return eval(model, data_val, metrics)
+    return eval(model, data_val, metrics, sample=sample)
+
+
+def load_eval(save_dir, metrics, i=0):
+    with open(save_dir + 'records.pickle', 'rb') as f:
+        record = pickle.load(f)
+        id, train_params = record[1][i], record[2][i]
+        _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
+        model, sample = train(train_params, load_path=save_dir + '%d.cp' % id)
+        eval(model, data_val, metrics, sample=sample)
 
 
 if __name__ == '__main__':
@@ -274,10 +297,10 @@ if __name__ == '__main__':
             'values': [1024, 2048, 4096, 8192, 16384],
         }
     }
-    metrics = ['mse', 'mae']
+    metrics = ['mse', 'mae', 'crps_ecdf', 'std']
 
     hyperparameter_tuning(
-        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=200, save_dir='models/cvae_sweep/')
+        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=200, save_dir='models/cvae_sweep2/')
 
     # train_params = {
     #     'model_params': {
@@ -294,3 +317,5 @@ if __name__ == '__main__':
     #     'batch_size': 4096,
     # }
     # train_and_eval(train_params, data_train, data_val, metrics, save_path='models/test.cp')
+
+    # load_eval('models/cvae_sweep/', metrics)
