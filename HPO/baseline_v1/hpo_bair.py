@@ -17,10 +17,36 @@ import argparse
 import glob
 import random
 
+from pathlib import Path
+
 from keras.layers.convolutional import Conv1D
+import logging
+
+from cnn_dataloader import E3SMDataset
 
 
-def set_environment(num_gpus_per_node=4, oracle_port="8000"):
+def get_filenames(dataroot, filenames):
+    '''
+    Create list of filenames
+    
+    Args:
+        dataroot: Relative or global path to directory of filenames
+        filenames: List of filename wildcards
+        stride_sample int: pick every nth sample
+    '''
+    
+    filepaths = []
+    for filename in filenames:
+        filepaths.extend(dataroot.glob('**/' + filename))
+    # f_mli = sorted([*f_mli1, *f_mli2]) # I commented this out. It seems unecessary to sort the list if it will be shuffled
+    random.shuffle(filepaths)
+    # f_mli = f_mli[0:72*5] # debugging
+    # random.shuffle(f_mli) # I commented this out. It seems unnecessary to shuffle twice.
+
+    return filepaths
+
+
+def set_environment(num_gpus_per_node=1, oracle_port="32768"):
     """
     This function sets up the environment variables for the Keras Tuner Oracle.
     It should be called at the beginning of the main function.
@@ -30,15 +56,10 @@ def set_environment(num_gpus_per_node=4, oracle_port="8000"):
 
     print("<< set_environment START >>")
     num_gpus_per_node = str(num_gpus_per_node)
-    nodename = os.environ["SLURMD_NODENAME"]
-    procid = os.environ["SLURM_LOCALID"]
+    nodename = "charybdis"
+    procid = "0"
     print(f"node name: {nodename}")
     print(f"procid:    {procid}")
-    stream = os.popen("scontrol show hostname $SLURM_NODELIST")
-    output = stream.read()
-    oracle = output.split("\n")[0]
-    # oracle_ip = os.environ["NERSC_NODE_HSN_IP"]
-    print(f"oracle ip: {oracle}")
     if procid == str(
         num_gpus_per_node
     ):  # This takes advantage of the fact that procid numbering starts with ZERO
@@ -51,9 +72,7 @@ def set_environment(num_gpus_per_node=4, oracle_port="8000"):
         os.environ["CUDA_VISIBLE_DEVICES"] = procid
     print(f'SY DEBUG: procid-{procid} / GPU-ID-{os.environ["CUDA_VISIBLE_DEVICES"]}')
 
-    os.environ["KERASTUNER_ORACLE_IP"] = (
-        oracle + ".ib.bridges2.psc.edu"
-    )  # Use full hostname
+    os.environ["KERASTUNER_ORACLE_IP"] = "localhost"  # Use full hostname
     os.environ["KERASTUNER_ORACLE_PORT"] = oracle_port
     print("KERASTUNER_TUNER_ID:    %s" % os.environ["KERASTUNER_TUNER_ID"])
     print("KERASTUNER_ORACLE_IP:   %s" % os.environ["KERASTUNER_ORACLE_IP"])
@@ -63,8 +82,7 @@ def set_environment(num_gpus_per_node=4, oracle_port="8000"):
 
 
 class CNNHyperModel(kt.HyperModel):
-    
-    def build_model(self, hp):
+    def build(self, hp):
         """
         Create a ResNet-style 1D CNN. The data is of shape (batch, lev, vars)
         where lev is treated as the spatial dimension. The architecture
@@ -122,16 +140,19 @@ class CNNHyperModel(kt.HyperModel):
             x = keras.layers.Dropout(hp_dropout)(x)
 
             # Project residual
-            residual = Conv1D(filters=filters, kernel_size=1, strides=1, padding="same")(
-                previous_block_activation
-            )
+            residual = Conv1D(
+                filters=filters, kernel_size=1, strides=1, padding="same"
+            )(previous_block_activation)
             x = keras.layers.add([x, residual])  # Add back residual
             previous_block_activation = x  # Set aside next residual
 
         # Output layers.
         # x = keras.layers.Dense(filters[-1], activation='gelu')(x) # Add another last layer.
         x = Conv1D(
-            out_shape[-1], kernel_size=1, activation=hp_pre_out_activation, padding="same"
+            out_shape[-1],
+            kernel_size=1,
+            activation=hp_pre_out_activation,
+            padding="same",
         )(x)
         # Assume that vertically resolved variables follow no particular range.
         output_lin = keras.layers.Dense(output_length_lin, activation="linear")(x)
@@ -171,11 +192,9 @@ class CNNHyperModel(kt.HyperModel):
 
         return model
 
-
     def fit(self, hp, model, *args, **kwargs):
         return model.fit(
             *args,
-            batch_size=hp.Choice("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]),
             **kwargs,
         )
 
@@ -195,75 +214,83 @@ class CNNHyperModel(kt.HyperModel):
         return norm_layer
 
 
-def main():
-    training_data_path = (
-        "/ocean/projects/atm200007p/jlin96/neurips_proj/e3sm_train_npy/"
+def decode_fn(record_bytes):
+    record = tf.io.parse_single_example(
+        record_bytes,
+        {
+            'X': tf.io.FixedLenFeature([360], dtype=tf.float32),
+            'Y': tf.io.FixedLenFeature([600], dtype=tf.float32)
+        }
     )
+    x = tf.reshape(record["X"], (60, 6))
+    #x = x[None, :, :]
+    y = tf.reshape(record["Y"], (60, 10))
+    #y = y[None, :, :]
+    return (x, y)
 
-    if os.environ["KERASTUNER_TUNER_ID"] != "chief":
-        with open(training_data_path + "train_input_cnn.npy", "rb") as f:
-            train_input = np.load(f)
-            # train_input.shape returns (10091520, 60, 6)
-        with open(training_data_path + "train_target_cnn.npy", "rb") as f:
-            train_target = np.load(f)
-            # train_target.shape returns (10091520, 60, 10)
-        with open(training_data_path + "val_input_cnn.npy", "rb") as f:
-            val_input = np.load(f)
-            # val_input.shape returns (1441920, 60, 6)
-        with open(training_data_path + "val_target_cnn.npy", "rb") as f:
-            val_target = np.load(f)
-            # val_target.shape returns (1441920, 10)
-    tuner = kt.Hyperband(
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+    training_data_path = "/shared/ritwik/dev/E3SM-MMF_baseline/data/tfrecords/"
+    train_match = ['E3SM-MMF.mli.000[1234567]-*-*-*.tfrecord', 'E3SM-MMF.mli.0008-01-*-*.tfrecord']
+    val_match = ['E3SM-MMF.mli.0008-0[23456789]-*-*.tfrecord', 'E3SM-MMF.mli.0008-1[012]-*-*.tfrecord', 'E3SM-MMF.mli.0009-01-*-*.tfrecord']
+    train_fnames = get_filenames(Path(training_data_path), train_match)
+    val_fnames = get_filenames(Path(training_data_path), val_match)
+    batch_size = 32
+
+    c = 0
+    for fn in train_fnames:
+        for record in tf.io.tf_record_iterator(fn):
+            c += 1
+    print(f"Train records: {c}")
+
+    ignore_order = tf.data.Options()
+    ignore_order.experimental_deterministic = False
+
+    logging.debug("Loading data")
+    train_ds = tf.data.TFRecordDataset(train_fnames) \
+        .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+        .with_options(ignore_order) \
+        .batch(batch_size, drop_remainder=True) \
+        .prefetch(buffer_size=tf.data.AUTOTUNE) \
+        .shuffle(1000)
+    val_ds = tf.data.TFRecordDataset(val_fnames) \
+        .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+        .with_options(ignore_order) \
+        .batch(batch_size, drop_remainder=True) \
+        .prefetch(buffer_size=tf.data.AUTOTUNE)
+    
+    print(train_ds, val_ds)
+    logging.debug("Data loaded")
+
+    tuner = kt.RandomSearch(
         hypermodel=CNNHyperModel(),
         objective="val_loss",
         max_trials=10,
         executions_per_trial=1,
-        overwrite=False,
-        directory="results",
+        overwrite=True,
+        directory="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results",
         project_name="bair",
     )
 
     kwargs = {
-        "epochs": 100,
-        "verbose": 2,
+        "epochs": 30,
+        "verbose": 1,
         "shuffle": True,
         "callbacks": [
             callbacks.EarlyStopping("val_loss", patience=10),
-            callbacks.TensorBoard(
-                log_dir="logs/bair/logs_tensorboard", histogram_freq=1
-            ),
-            callbacks.BackupAndRestore("results/bair_backup"),
+            #callbacks.TensorBoard(
+            #    log_dir="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/logs/bair/logs_tensorboard", histogram_freq=1
+            #),
+            callbacks.BackupAndRestore("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_backup"),
         ],
     }
     # print("---SEARCH SPACE---")
     # tuner.search_space_summary()
 
-    # search
-    if os.environ["KERASTUNER_TUNER_ID"] != "chief":
-        tuner.search(
-            train_input, train_target, validation_data=(val_input, val_target), **kwargs
-        )
+    tuner.search(
+        train_ds, steps_per_epoch=2000, validation_data=val_ds, validation_steps=100, **kwargs
+    )
 
 
 if __name__ == "__main__":
-    # command line argument
-
-    # assign GPUs for workers
-    # gpus_per_node = 4 # NERSC Perlmutter
-    # ntasks = int(os.environ['SLURM_NTASKS']) # "total number of workers" + 1 (for oracle)
-    # nnodes = int(os.environ['SLURM_JOB_NUM_NODES'])
-    # workers_per_node = int((ntasks - 1) / nnodes)
-    # workers_per_gpu  = int(workers_per_node / gpus_per_node)
-    set_environment(num_gpus_per_node=4, oracle_port="8000")
-
-    # limit memory preallocation
-    physical_devices = tf.config.list_physical_devices("GPU")
-    tf.config.experimental.set_memory_growth(
-        physical_devices[0], True
-    )  # only using a single GPU per trial
-
-    # query available GPU (as debugging info only)
-    print(tf.config.list_physical_devices("GPU"))
-
-    # run main program
     main()
