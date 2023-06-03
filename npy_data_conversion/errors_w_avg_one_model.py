@@ -66,8 +66,10 @@ dset = netCDF4.Dataset('mass_weight_area_pressure.nc')
 mweightpre = np.array(dset['mweightpre']).T # 60x384 ==> 384x60
 area = np.array(dset['area'])[:,None] # 384 ==> 384x1
 Lv = 2.26e6
+cp = 1.00464e3
+rho = 997
 
-weight = np.concatenate( (mweightpre,mweightpre,area,area,Lv*area,Lv*area,area,area,area,area), axis=1 )
+weight = np.concatenate( (cp*mweightpre,Lv*mweightpre,area,area,rho*Lv*area,rho*Lv*area,area,area,area,area), axis=1 )
 
 # numpy return erronous errors when summing over "large" number of points with float32 format, 
 # so we transform arrays to float64 type before computing coefficient of determination R2
