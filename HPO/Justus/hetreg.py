@@ -188,7 +188,7 @@ def eval(model, data, metrics, sample=None, plot=True):
                     # E[Y - Y'] = sum_i sum_j |Y_i - Y_j| / n^2
                     diff = y_hats[..., 1:] - y_hats[..., :-1]
                     count = torch.arange(1, n, device=device) * torch.arange(n - 1, 0, -1, device=device)
-                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / (n * (n-1))
+                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / (2 * n * (n-1))
                 elif m == 'std':
                     # Test sampler
                     ths_res = torch.stack([sample(x) for _ in range(n)], 2).std(dim=-1).mean(axis=0)

@@ -2,6 +2,7 @@ import pickle
 from functools import partial
 import matplotlib.pyplot as plt
 import seaborn as sns
+import h5py
 import numpy as np
 import torch
 from data import get_data
@@ -110,7 +111,11 @@ class ConditionalVAE(torch.nn.Module):
         else:
             # Set to prior mean
             z = torch.zeros([x.shape[0], self.latent_dims]).to(device)
-        return self.decoder(z, x)
+        y = self.decoder(z, x)
+        if random:
+            # add output noise
+            y = y + self.encoder.N.sample([x.shape[0], 128]) * self.beta
+        return y
 
     def trainer(self, data, epochs=20, save="models/vae.cp", plot=True, loss_type='mse',
                 optimizer='adam', lr=0.0001, weight_decay=0):
@@ -183,16 +188,19 @@ def train(train_params, data=None, load_path=None, save_path=None):
     return partial(vae.sample, random=False), vae.sample
 
 
-def eval(model, data, metrics, sample=None, plot=True):
+def eval(model, data, metrics, sample=None, plot=True, save_preds=False):
     """
     Evaluate model on the validation data, returns a dict with entries {metric: value}
     """
     results = {m: 0 for m in metrics}
+    all_preds = []
     with torch.no_grad():
         for batch in progress(data, text='Evaluating'):
             x = batch['x'].to(device)
             y = batch['y'].to(device)
             y_hat = model(x)
+            if save_preds:
+                all_preds += [y_hat]
 
             # Compute metrics
             for m in metrics:
@@ -208,7 +216,7 @@ def eval(model, data, metrics, sample=None, plot=True):
                     # E[Y - Y'] = sum_i sum_j |Y_i - Y_j| / n^2
                     diff = y_hats[..., 1:] - y_hats[..., :-1]
                     count = torch.arange(1, n, device=device) * torch.arange(n - 1, 0, -1, device=device)
-                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / (n*(n-1))
+                    ths_res = mae - (diff * count).sum(axis=-1).mean(axis=0) / (2 * n * (n-1))
                 elif m == 'std':
                     # Test sampler
                     n = 20
@@ -216,6 +224,10 @@ def eval(model, data, metrics, sample=None, plot=True):
                 else:
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
+    if save_preds:
+        hf = h5py.File('cvae.h5', 'w')
+        hf.create_dataset('pred', data=torch.cat(all_preds).cpu().numpy())
+        hf.close()
     for m in metrics:
         results[m] /= len(data.dataset)
         if plot:
@@ -229,7 +241,7 @@ def eval(model, data, metrics, sample=None, plot=True):
         results[m] = results[m].mean().cpu().numpy()
         print('%s: %.4g' % (m, results[m]))
     if plot:
-        # plt.show()
+        plt.show()
         plt.savefig('results/tmp_metrics.png')
         plt.close('all')
     return results
@@ -251,13 +263,17 @@ def train_and_eval(train_params, metrics, save_path=None):
     return eval(model, data_val, metrics, sample=sample)
 
 
-def load_eval(save_dir, metrics, i=0):
+def load_eval(save_dir, metrics, i=0, save_preds=False, retrain=False):
     with open(save_dir + 'records.pickle', 'rb') as f:
         record = pickle.load(f)
         id, train_params = record[1][i], record[2][i]
-        _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
-        model, sample = train(train_params, load_path=save_dir + '%d.cp' % id)
-        eval(model, data_val, metrics, sample=sample)
+        if retrain:
+            data_train, data_val = get_data(batch_size=train_params.pop('batch_size'))
+            model, sample = train(train_params, data_train)
+        else:
+            _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
+            model, sample = train(train_params, load_path=save_dir + '%d.cp' % id)
+        eval(model, data_val, metrics, sample=sample, save_preds=save_preds)
 
 
 if __name__ == '__main__':
@@ -299,8 +315,8 @@ if __name__ == '__main__':
     }
     metrics = ['mse', 'mae', 'crps_ecdf', 'std']
 
-    hyperparameter_tuning(
-        sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=200, save_dir='models/cvae_sweep2/')
+    # hyperparameter_tuning(
+    #     sweep, partial(train_and_eval, metrics=metrics), 'mse', runs=400, save_dir='models/cvae_sweep3/')
 
     # train_params = {
     #     'model_params': {
@@ -318,4 +334,6 @@ if __name__ == '__main__':
     # }
     # train_and_eval(train_params, data_train, data_val, metrics, save_path='models/test.cp')
 
-    # load_eval('models/cvae_sweep/', metrics)
+    load_eval('models/cvae_sweep/', metrics, save_preds=True)
+    # load_eval('models/cvae_sweep2/', metrics)
+    # load_eval('models/cvae_sweep3/', metrics)

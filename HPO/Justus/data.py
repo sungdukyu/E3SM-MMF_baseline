@@ -58,7 +58,7 @@ def get_data(val_only=False, **kwargs):
         datasets = [NumpyData(*[DATA_PATH_NPY + '%s_%s.npy' % (t, s) for s in ['input', 'target']],
                               process_x=to_gpu, process_y=to_gpu) for t in ['train', 'val']]
     elif datasets[1] is None and val_only:
-        datasets[1] = NumpyData(*[DATA_PATH_NPY + 'val_%s.npy' % s for s in ['input', 'target']],
+        datasets[1] = NumpyData(*[DATA_PATH_NPY + 'val_%s_stride6.npy' % s for s in ['input', 'target']],
                                 process_x=to_gpu, process_y=to_gpu)
     return [d.dataloader(**kwargs) if d is not None else None for d in datasets]
 
