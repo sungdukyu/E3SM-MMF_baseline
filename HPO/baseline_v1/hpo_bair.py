@@ -18,11 +18,10 @@ import glob
 import random
 
 from pathlib import Path
+import time
 
 from keras.layers.convolutional import Conv1D
 import logging
-
-from cnn_dataloader import E3SMDataset
 
 
 def get_filenames(dataroot, filenames):
@@ -94,7 +93,7 @@ class CNNHyperModel(kt.HyperModel):
         output_length_lin = 2
         output_length_relu = out_shape[-1] - 2
 
-        hp_depth = hp.Int("depth", 2, 50, default=2)
+        hp_depth = hp.Int("depth", 2, 15, default=2)
         hp_channel_width = hp.Int("channel_width", 32, 512, default=32)
         hp_kernel_width = hp.Choice("kernel_width", [3, 5, 7, 9], default=3)
         hp_activation = hp.Choice(
@@ -228,67 +227,110 @@ def decode_fn(record_bytes):
     #y = y[None, :, :]
     return (x, y)
 
+def data_generator(inputs, targets):
+    def generator():
+        num_samples = inputs.shape[0]
+        for i in range(num_samples):
+            yield inputs[i], targets[i]
+    
+    return generator
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
-    training_data_path = "/shared/ritwik/dev/E3SM-MMF_baseline/data/tfrecords/"
-    train_match = ['E3SM-MMF.mli.000[1234567]-*-*-*.tfrecord', 'E3SM-MMF.mli.0008-01-*-*.tfrecord']
-    val_match = ['E3SM-MMF.mli.0008-0[23456789]-*-*.tfrecord', 'E3SM-MMF.mli.0008-1[012]-*-*.tfrecord', 'E3SM-MMF.mli.0009-01-*-*.tfrecord']
-    train_fnames = get_filenames(Path(training_data_path), train_match)
-    val_fnames = get_filenames(Path(training_data_path), val_match)
-    batch_size = 32
+    #training_data_path = "/shared/ritwik/dev/E3SM-MMF_baseline/data/tfrecords/"
+    #train_match = ['E3SM-MMF.mli.000[1234567]-*-*-*.tfrecord', 'E3SM-MMF.mli.0008-01-*-*.tfrecord']
+    #val_match = ['E3SM-MMF.mli.0008-0[23456789]-*-*.tfrecord', 'E3SM-MMF.mli.0008-1[012]-*-*.tfrecord', 'E3SM-MMF.mli.0009-01-*-*.tfrecord']
+    #train_fnames = get_filenames(Path(training_data_path), train_match)
+    #val_fnames = get_filenames(Path(training_data_path), val_match)
+    #batch_size = 256
 
-    c = 0
-    for fn in train_fnames:
-        for record in tf.io.tf_record_iterator(fn):
-            c += 1
-    print(f"Train records: {c}")
-
-    ignore_order = tf.data.Options()
-    ignore_order.experimental_deterministic = False
+    #ignore_order = tf.data.Options()
+    #ignore_order.experimental_deterministic = False
 
     logging.debug("Loading data")
-    train_ds = tf.data.TFRecordDataset(train_fnames) \
-        .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
-        .with_options(ignore_order) \
-        .batch(batch_size, drop_remainder=True) \
-        .prefetch(buffer_size=tf.data.AUTOTUNE) \
-        .shuffle(1000)
-    val_ds = tf.data.TFRecordDataset(val_fnames) \
-        .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
-        .with_options(ignore_order) \
-        .batch(batch_size, drop_remainder=True) \
-        .prefetch(buffer_size=tf.data.AUTOTUNE)
+    batch_size = 512  # Adjust the batch size according to your available GPU memory
+    shuffle_buffer = 2000
+
+    start = time.time()
+    train_input = np.load("/home/ritwik/e3sm-np/train_input_cnn.npy")
+    end = time.time()
+    print(f"Took {end - start} seconds to load train_input")
+
+    start = time.time()
+    train_target = np.load("/home/ritwik/e3sm-np/train_target_cnn.npy")
+    end = time.time()
+    print(f"Took {end - start} seconds to load train_target")
+
+    start = time.time()
+    val_input = np.load("/home/ritwik/e3sm-np/val_input_cnn.npy")
+    end = time.time()
+    print(f"Took {end - start} seconds to load val_input")
+
+    start = time.time()
+    val_target = np.load("/home/ritwik/e3sm-np/val_target_cnn.npy")
+    end = time.time()
+    print(f"Took {end - start} seconds to load val_target")
+
+
+    train_input_generator = data_generator(train_input, train_target)
+    val_input_generator = data_generator(val_input, val_target)
+
+    train_ds = tf.data.Dataset.from_generator(train_input_generator,
+                                                output_signature=(
+                                                tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
+                                                tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
+    val_ds = tf.data.Dataset.from_generator(val_input_generator,
+                                                output_signature=(
+                                                tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
+                                                tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
+
+    train_ds = train_ds.shuffle(shuffle_buffer).batch(batch_size)
+    val_ds = val_ds.batch(batch_size)
+
+    #train_ds = tf.data.TFRecordDataset(train_fnames) \
+    #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+    #    .with_options(ignore_order) \
+    #    .batch(batch_size, drop_remainder=True) \
+    #    .prefetch(buffer_size=tf.data.AUTOTUNE) \
+    #    .shuffle(50)
+    #val_ds = tf.data.TFRecordDataset(val_fnames) \
+    #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+    #    .with_options(ignore_order) \
+    #    .batch(batch_size, drop_remainder=True) \
+    #    .prefetch(buffer_size=tf.data.AUTOTUNE)
     
-    print(train_ds, val_ds)
+    #print(train_ds, val_ds)
     logging.debug("Data loaded")
 
-    tuner = kt.RandomSearch(
+    tuner = kt.Hyperband(
         hypermodel=CNNHyperModel(),
         objective="val_loss",
-        max_trials=10,
-        executions_per_trial=1,
+        max_epochs=5,
+        factor=3,
+        hyperband_iterations=1,
         overwrite=True,
         directory="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results",
         project_name="bair",
     )
 
     kwargs = {
-        "epochs": 30,
+        "epochs": 25,
         "verbose": 1,
         "shuffle": True,
+        "use_multiprocessing": True,
         "callbacks": [
             callbacks.EarlyStopping("val_loss", patience=10),
             #callbacks.TensorBoard(
             #    log_dir="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/logs/bair/logs_tensorboard", histogram_freq=1
             #),
-            callbacks.BackupAndRestore("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_backup"),
+            callbacks.ModelCheckpoint("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_backup", verbose=1),
         ],
     }
     # print("---SEARCH SPACE---")
     # tuner.search_space_summary()
 
     tuner.search(
-        train_ds, steps_per_epoch=2000, validation_data=val_ds, validation_steps=100, **kwargs
+        train_ds, steps_per_epoch=10091520//batch_size, validation_data=val_ds, **kwargs
     )
 
 
