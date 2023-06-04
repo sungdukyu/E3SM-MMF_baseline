@@ -247,60 +247,63 @@ def main():
     #ignore_order = tf.data.Options()
     #ignore_order.experimental_deterministic = False
 
-    logging.debug("Loading data")
-    batch_size = 512  # Adjust the batch size according to your available GPU memory
-    shuffle_buffer = 2000
+    if os.environ["KERASTUNER_TUNER_ID"] != "chief":
+        logging.debug("Loading data")
+        batch_size = 512  # Adjust the batch size according to your available GPU memory
+        shuffle_buffer = 2000
 
-    start = time.time()
-    train_input = np.load("/home/ritwik/e3sm-np/train_input_cnn.npy")
-    end = time.time()
-    print(f"Took {end - start} seconds to load train_input")
+        start = time.time()
+        train_input = np.load("/home/ritwik/e3sm-np/train_input_cnn.npy")
+        end = time.time()
+        print(f"Took {end - start} seconds to load train_input")
 
-    start = time.time()
-    train_target = np.load("/home/ritwik/e3sm-np/train_target_cnn.npy")
-    end = time.time()
-    print(f"Took {end - start} seconds to load train_target")
+        start = time.time()
+        train_target = np.load("/home/ritwik/e3sm-np/train_target_cnn.npy")
+        end = time.time()
+        print(f"Took {end - start} seconds to load train_target")
 
-    start = time.time()
-    val_input = np.load("/home/ritwik/e3sm-np/val_input_cnn.npy")
-    end = time.time()
-    print(f"Took {end - start} seconds to load val_input")
+        start = time.time()
+        val_input = np.load("/home/ritwik/e3sm-np/val_input_cnn.npy")
+        end = time.time()
+        print(f"Took {end - start} seconds to load val_input")
 
-    start = time.time()
-    val_target = np.load("/home/ritwik/e3sm-np/val_target_cnn.npy")
-    end = time.time()
-    print(f"Took {end - start} seconds to load val_target")
+        start = time.time()
+        val_target = np.load("/home/ritwik/e3sm-np/val_target_cnn.npy")
+        end = time.time()
+        print(f"Took {end - start} seconds to load val_target")
 
 
-    train_input_generator = data_generator(train_input, train_target)
-    val_input_generator = data_generator(val_input, val_target)
+        train_input_generator = data_generator(train_input, train_target)
+        val_input_generator = data_generator(val_input, val_target)
 
-    train_ds = tf.data.Dataset.from_generator(train_input_generator,
-                                                output_signature=(
-                                                tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
-                                                tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
-    val_ds = tf.data.Dataset.from_generator(val_input_generator,
-                                                output_signature=(
-                                                tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
-                                                tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
+        train_ds = tf.data.Dataset.from_generator(train_input_generator,
+                                                    output_signature=(
+                                                    tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
+                                                    tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
+        val_ds = tf.data.Dataset.from_generator(val_input_generator,
+                                                    output_signature=(
+                                                    tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
+                                                    tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
 
-    train_ds = train_ds.shuffle(shuffle_buffer).batch(batch_size)
-    val_ds = val_ds.batch(batch_size)
+        train_ds = train_ds.shuffle(shuffle_buffer).batch(batch_size)
+        val_ds = val_ds.batch(batch_size)
 
-    #train_ds = tf.data.TFRecordDataset(train_fnames) \
-    #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
-    #    .with_options(ignore_order) \
-    #    .batch(batch_size, drop_remainder=True) \
-    #    .prefetch(buffer_size=tf.data.AUTOTUNE) \
-    #    .shuffle(50)
-    #val_ds = tf.data.TFRecordDataset(val_fnames) \
-    #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
-    #    .with_options(ignore_order) \
-    #    .batch(batch_size, drop_remainder=True) \
-    #    .prefetch(buffer_size=tf.data.AUTOTUNE)
-    
-    #print(train_ds, val_ds)
-    logging.debug("Data loaded")
+        #train_ds = tf.data.TFRecordDataset(train_fnames) \
+        #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+        #    .with_options(ignore_order) \
+        #    .batch(batch_size, drop_remainder=True) \
+        #    .prefetch(buffer_size=tf.data.AUTOTUNE) \
+        #    .shuffle(50)
+        #val_ds = tf.data.TFRecordDataset(val_fnames) \
+        #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
+        #    .with_options(ignore_order) \
+        #    .batch(batch_size, drop_remainder=True) \
+        #    .prefetch(buffer_size=tf.data.AUTOTUNE)
+        
+        #print(train_ds, val_ds)
+        logging.debug("Data loaded")
+
+    print(os.environ["KERASTUNER_TUNER_ID"], os.environ["KERASTUNER_ORACLE_IP"], os.environ["KERASTUNER_ORACLE_PORT"])
 
     tuner = kt.Hyperband(
         hypermodel=CNNHyperModel(),
@@ -308,10 +311,12 @@ def main():
         max_epochs=5,
         factor=3,
         hyperband_iterations=1,
-        overwrite=True,
+        overwrite=False,
         directory="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results",
         project_name="bair",
     )
+
+    print("Tuner created")
 
     kwargs = {
         "epochs": 25,
@@ -326,12 +331,15 @@ def main():
             callbacks.ModelCheckpoint("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_backup", verbose=1),
         ],
     }
-    # print("---SEARCH SPACE---")
-    # tuner.search_space_summary()
+    
+    if os.environ["KERASTUNER_TUNER_ID"] == "chief":
+        print("---SEARCH SPACE---")
+        tuner.search_space_summary()
 
-    tuner.search(
-        train_ds, steps_per_epoch=10091520//batch_size, validation_data=val_ds, **kwargs
-    )
+    if os.environ["KERASTUNER_TUNER_ID"] != "chief":
+        tuner.search(
+            train_ds, steps_per_epoch=10091520//batch_size, validation_data=val_ds, **kwargs
+        )
 
 
 if __name__ == "__main__":
