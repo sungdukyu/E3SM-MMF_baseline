@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name="Retrain_v2"
 #SBATCH --output="logs/Task3-Step2-retrain.%j.%N.out"
-#SBATCH -q debug
-#SBATCH --nodes=1
-#SBATCH --gpus=4
+#SBATCH -q regular
+#SBATCH --nodes=8
+#SBATCH --gpus=32
 #SBATCH --constraint=gpu
 #SBATCH --export=ALL
-#SBATCH --account=m3312
+#SBATCH --account=m4334
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=sungduk@uci.edu
-#SBATCH -t 00:30:00
+#SBATCH -t 12:00:00
 
 module load parallel
 
@@ -23,16 +23,16 @@ f_progress=./parallel.progress.${jobid}.log
 export WDIR=`pwd`
 
 # set number of jobs per node (note that 4 gpus per node)
-export JOBS_PER_NODE=44
+export JOBS_PER_NODE=20
 
 # set up gnu parallel
 bash expand_nodelist.sh $SLURM_JOB_NODELIST > logs/hostfile.${jobid}.txt
 
-# initial
-parallel -j $JOBS_PER_NODE --delay 20 --joblog $f_progress --slf logs/hostfile.${jobid}.txt --wd /global/cfs/cdirs/m4331/sungduk/LEAP/E3SM-MMF_baseline/HPO/baseline_v1/step2_retrain "module load cudnn cudatoolkit; source ~/.bashrc; conda activate tf_conda; python step2_retrain.py" :::: top44.lot.v2.txt ::::+ top44.trial.v2.txt ::: "initial"
-
 # resuming
-#parallel -j $JOBS_PER_NODE --delay 20 --joblog $f_progress --slf logs/hostfile.${jobid}.txt --wd /global/cfs/cdirs/m4331/sungduk/LEAP/E3SM-MMF_baseline/HPO/baseline_v1/step2_retrain "module load cudnn cudatoolkit; source ~/.bashrc; conda activate tf_conda; python step2_retrain.py" :::: top44.lot.v2.txt ::::+ top44.trial.v2.txt ::: "continue"
+parallel -j $JOBS_PER_NODE --delay 4 --joblog $f_progress --slf logs/hostfile.${jobid}.txt --wd /global/cfs/cdirs/m4331/sungduk/LEAP/E3SM-MMF_baseline/HPO/baseline_v2/step2_retrain "module load cudnn cudatoolkit; source ~/.bashrc; conda activate tf_conda; python step2_retrain.py" :::: ../step1_analysis/top160.lot.v2.txt ::::+ ../step1_analysis/top160.trial.v2.txt ::: "continue"
 # note that -j is for "jobs PER NODE"
 # add --resume for continuing parallel job
-# last argument "conitune" is for resuming training
+#
+# last argument
+# "initial" for initial training
+# "continue" for continuing training
