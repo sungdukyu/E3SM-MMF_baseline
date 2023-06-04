@@ -33,8 +33,27 @@ plt.rcParams.update({'font.size': 32,
 model_name = 'RPN'
 
 # load model target values of shape Npoints x 128
-pred_y = np.load('pred_y.npy')
-mlo_scale = np.array( np.load('mlo_scale.npy'), dtype=np.float32)
+
+##########################################
+################## cVAE ##################
+##########################################
+#import h5py
+#hf = h5py.File('/ocean/projects/atm200007p/mbhouri/neurips_data/cvae.h5', 'r')
+#Datasetnames=hf.keys()
+#n1 = hf.get('pred')
+#pred_y = np.array(n1)
+
+##########################################
+################## RPN ###################
+##########################################
+pred_y = np.load('/ocean/projects/atm200007p/mbhouri/neurips_data/rpn_pred_v1_stride6.npy')
+
+##########################################
+################## MLP ###################
+##########################################
+#pred_y = np.load('/ocean/projects/atm200007p/sungduk/for_aziz/MLP_v1_ne4/001_backup_phase-7_retrained_models_step2_lot-147_trial_0027.best.h5.npy')
+
+mlo_scale = np.array( np.load('/ocean/projects/atm200007p/mbhouri/neurips_data/mlo_scale.npy'), dtype=np.float32)
 pred_y = pred_y / mlo_scale
 
 ######################################
@@ -52,16 +71,16 @@ test_y = np.load('/ocean/projects/atm200007p/jlin96/neurips_proj/e3sm_train_npy/
 test_y = test_y / mlo_scale
 
 # file 'pressures_val_stride6_60lvls.npy' contains pressure levels in Pa
-pressure = np.load('pressures_val_stride6_60lvls.npy')/100
+pressure = np.load('/ocean/projects/atm200007p/mbhouri/neurips_data/pressures_val_stride6_60lvls.npy')/100
 N_pressure = pressure.shape[0] # Number of pressure levels: 60
 
 # load dictionary of latitude-longitude coordinates of GCM grid on which data is saved
-with open('indextolatlons.pkl', 'rb') as f:
+with open('/ocean/projects/atm200007p/mbhouri/neurips_data/indextolatlons.pkl', 'rb') as f:
     data = pickle.load(f)
 N_lat_long = len(data) # = 384 There are 384 points in latitude-longitude GCM grid
 
 import netCDF4
-dset = netCDF4.Dataset('mass_weight_area_pressure.nc')
+dset = netCDF4.Dataset('/ocean/projects/atm200007p/mbhouri/neurips_data/mass_weight_area_pressure.nc')
 
 mweightpre = np.array(dset['mweightpre']).T # 60x384 ==> 384x60
 area = np.array(dset['area'])[:,None] # 384 ==> 384x1
