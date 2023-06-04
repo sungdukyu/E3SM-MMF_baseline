@@ -247,10 +247,12 @@ def main():
     #ignore_order = tf.data.Options()
     #ignore_order.experimental_deterministic = False
 
+    batch_size = 512  # Adjust the batch size according to your available GPU memory
+    shuffle_buffer = 2000
+    max_epochs = 5
+
     if os.environ["KERASTUNER_TUNER_ID"] != "chief":
         logging.debug("Loading data")
-        batch_size = 512  # Adjust the batch size according to your available GPU memory
-        shuffle_buffer = 2000
 
         start = time.time()
         train_input = np.load("/home/ritwik/e3sm-np/train_input_cnn.npy")
@@ -285,7 +287,7 @@ def main():
                                                     tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
                                                     tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
 
-        train_ds = train_ds.shuffle(shuffle_buffer).batch(batch_size)
+        train_ds = train_ds.repeat(max_epochs).shuffle(shuffle_buffer).batch(batch_size, drop_remainder=True)
         val_ds = val_ds.batch(batch_size)
 
         #train_ds = tf.data.TFRecordDataset(train_fnames) \
@@ -308,7 +310,7 @@ def main():
     tuner = kt.Hyperband(
         hypermodel=CNNHyperModel(),
         objective="val_loss",
-        max_epochs=5,
+        max_epochs=max_epochs,
         factor=3,
         hyperband_iterations=1,
         overwrite=False,
@@ -319,7 +321,6 @@ def main():
     print("Tuner created")
 
     kwargs = {
-        "epochs": 25,
         "verbose": 1,
         "shuffle": True,
         "use_multiprocessing": True,
