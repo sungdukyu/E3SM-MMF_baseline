@@ -26,7 +26,7 @@ class data_preprocessing:
         self.inp_min = inp_min
         self.out_scale = out_scale
 
-    def get_xrdata(self, file, file_vars = ""):
+    def get_xrdata(self, file, file_vars = ''):
         '''
         This function reads in a file and returns an xarray dataset with the variables specified.
         '''
@@ -45,22 +45,22 @@ class data_preprocessing:
         # read inputs
         return self.get_xrdata(input_file, self.input_vars)
 
-    def get_target(self, target_file, input_file = ""):
+    def get_output(self, output_file, input_file = ''):
         '''
-        This function reads in a file and returns an xarray dataset with the target variables for the emulator.
+        This function reads in a file and returns an xarray dataset with the output variables for the emulator.
         '''
         # read inputs
-        if input_file == "":
-            input_file = target_file.replace('.mlo.','.mli.')
+        if input_file == '':
+            input_file = output_file.replace('.mlo.','.mli.')
         ds_input = self.get_input(input_file)
         
-        ds_target = self.get_xrdata(target_file)
+        ds_output = self.get_xrdata(output_file)
         # each timestep is 20 minutes which corresponds to 1200 seconds
-        ds_target['ptend_t'] = (ds_target['state_t'] - ds_input['state_t'])/1200 # T tendency [K/s]
-        ds_target['ptend_q0001'] = (ds_target['state_q0001'] - ds_input['state_q0001'])/1200 # Q tendency [kg/kg/s]
-        ds_target = ds_target[self.output_vars]
-        return ds_target
-
+        ds_output['ptend_t'] = (ds_output['state_t'] - ds_input['state_t'])/1200 # T tendency [K/s]
+        ds_output['ptend_q0001'] = (ds_output['state_q0001'] - ds_input['state_q0001'])/1200 # Q tendency [kg/kg/s]
+        ds_output = ds_output[self.output_vars]
+        return ds_output
+    
     def load_ncdata_with_generator(self, filelist:list):
         '''
         This function works as a dataloader when training the emulator with raw netCDF files.
@@ -73,17 +73,17 @@ class data_preprocessing:
                 # read outputs
                 ds_output = self.get_output(file)
                 
-                # normalization, scaling
+                # normalizatoin, scaling
                 ds_input = (ds_input - self.inp_mean)/(self.inp_max - self.inp_min)
                 ds_output = ds_output*self.out_scale
 
                 # stack
                 #ds = ds.stack({'batch':{'sample','ncol'}})
                 ds_input = ds_input.stack({'batch':{'ncol'}})
-                ds_input = ds_input.to_stacked_array("mlvar", sample_dims=["batch"], name='mli')
+                ds_input = ds_input.to_stacked_array('mlvar', sample_dims=['batch'], name='mli')
                 #dso = dso.stack({'batch':{'sample','ncol'}})
                 ds_output = ds_output.stack({'batch':{'ncol'}})
-                ds_output = ds_output.to_stacked_array("mlvar", sample_dims=["batch"], name='mlo')
+                ds_output = ds_output.to_stacked_array('mlvar', sample_dims=['batch'], name='mlo')
                 
                 yield (ds_input.values, ds_output.values)
 
@@ -93,33 +93,18 @@ class data_preprocessing:
             output_shapes=((None,124),(None,128))
         )
     
-    def getdates(*args, data_path, stride_sample):
-        '''
-        This function takes in a list of file endings and returns a list of dates corresponding to the files.
-        '''
-        f_mli_data = []
-        for arg in args:
-            f_mli_data = f_mli_data + glob.glob(data_path + arg)
-        f_mli_data = sorted(f_mli_data)[::stride_sample]
-        dates = [re.sub("^.*mli\.", "", x) for x in f_mli_data]
-        dates = [re.sub("\.nc$", "", x) for x in dates]
-        repeat_dates = []
-        for date in dates:
-            for i in range(384):
-                repeat_dates.append(date)
-        return repeat_dates
-
     def make_npy(self, 
                  filelist:list, 
-                 prefix = "", 
-                 save_path = "", 
+                 prefix = '', 
+                 save_path = '', 
                  stride_sample = 7,
                  save_latlontime_dict = False):
         '''
-        This function saves the training data as a .npy file.
+        This function saves the training data as a .npy file. Prefix should be train or val
         '''
         prefix = save_path + prefix
-        data_loader = self.load_ncdata_with_generator(filelist[::stride_sample])
+        data_files = sorted(filelist)[::stride_sample]
+        data_loader = self.load_ncdata_with_generator(data_files)
         npy_iterator = list(data_loader.as_numpy_iterator())
         npy_input = np.concatenate([npy_iterator[x][0] for x in range(len(npy_iterator))])
         npy_target = np.concatenate([npy_iterator[x][1] for x in range(len(npy_iterator))])
@@ -128,8 +113,14 @@ class data_preprocessing:
         with open(save_path + prefix + '_target.npy', 'wb') as f:
             np.save(f, np.float32(npy_target))
         if save_latlontime_dict:
-            latlontime = {i: [(self.grid_info["lat"].values[i%384], self.grid_info["lon"].values[i%384]), val_dates[i]] for i in range(npy_input.shape[0])}
-            with open(save_path + 'indextolatlontime.pkl', 'wb') as f:
+            dates = [re.sub('^.*mli\.', '', x) for x in data_files]
+            dates = [re.sub('\.nc$', '', x) for x in dates]
+            repeat_dates = []
+            for date in dates:
+                for i in range(384):
+                    repeat_dates.append(date)
+            latlontime = {i: [(self.grid_info['lat'].values[i%self.latlonnum], self.grid_info['lon'].values[i%self.latlonnum]), repeat_dates[i]] for i in range(npy_input.shape[0])}
+            with open(save_path + prefix + '_indextolatlontime.pkl', 'wb') as f:
                 pickle.dump(latlontime, f)
         return
     
@@ -150,11 +141,11 @@ class data_preprocessing:
         cls.lonlim = lonlim
 
     @staticmethod
-    def ls(data_path = ""):
+    def ls(data_path = ''):
         '''
         You can treat this as a Python wrapper for the bash command "ls".
         '''
-        return os.popen(" ".join(["ls", data_path])).read().splitlines()
+        return os.popen(' '.join(['ls', data_path])).read().splitlines()
     
     @staticmethod
     def concatenate_arrays(xrdata, vars):
