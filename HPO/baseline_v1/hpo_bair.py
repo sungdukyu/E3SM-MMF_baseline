@@ -2,6 +2,7 @@ import xarray as xr
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+from keras import backend as K
 from keras import models
 from keras import layers
 from keras import callbacks
@@ -79,6 +80,46 @@ def set_environment(num_gpus_per_node=1, oracle_port="32768"):
     # print(os.environ)
     print("<< set_environment END >>")
 
+def continuous_ranked_probability_score(y_true, y_pred):
+    """Continuous Ranked Probability Score.
+
+    This implementation is based on the identity:
+    .. math::
+        CRPS(F, x) = E_F|X - x| - 1/2 * E_F|X - X'|
+
+    where X and X' denote independent random variables drawn from the forecast
+    distribution F, and E_F denotes the expectation value under F.
+    We've closly followed the aproach of 
+    https://github.com/TheClimateCorporation/properscoring for
+    for the actual implementation.
+
+    Reference
+    ---------
+    Tilmann Gneiting and Adrian E. Raftery. Strictly proper scoring rules,
+        prediction, and estimation, 2005. University of Washington Department of
+        Statistics Technical Report no. 463R.
+        https://www.stat.washington.edu/research/reports/2004/tr463R.pdf
+    Args:
+    y_true: tf.Tensor.
+    y_pred: tf.Tensor.
+        Tensors of same shape and type.
+    """
+    score = tf.reduce_mean(tf.abs(tf.subtract(y_pred, y_true)), axis=-1)
+    diff = tf.subtract(tf.expand_dims(y_pred, -1), tf.expand_dims(y_pred, -2))
+    score = tf.add(score, tf.multiply(tf.constant(-0.5, dtype=diff.dtype),tf.reduce_mean(tf.abs(diff),axis=(-2, -1))))
+
+    return tf.reduce_mean(score)
+
+
+def mse_adjusted(y_true, y_pred):
+    se = K.square(y_pred - y_true)
+    return K.mean(se[:,:,0:2])*(120/128) + K.mean(se[:,:,2:10])*(8/128)
+    
+
+def mae_adjusted(y_true, y_pred):
+    ae = K.abs(y_pred - y_true)
+    return K.mean(ae[:,:,0:2])*(120/128) + K.mean(ae[:,:,2:10])*(8/128)
+
 
 class CNNHyperModel(kt.HyperModel):
     def build(self, hp):
@@ -93,18 +134,15 @@ class CNNHyperModel(kt.HyperModel):
         output_length_lin = 2
         output_length_relu = out_shape[-1] - 2
 
-        hp_depth = hp.Int("depth", 2, 15, default=2)
-        hp_channel_width = hp.Int("channel_width", 32, 512, default=32)
-        hp_kernel_width = hp.Choice("kernel_width", [3, 5, 7, 9], default=3)
-        hp_activation = hp.Choice(
-            "activation", ["gelu", "elu", "relu", "swish"], default="gelu"
-        )
-        hp_pre_out_activation = hp.Choice(
-            "pre_out_activation", ["gelu", "elu", "relu", "swish"], default="elu"
-        )
+        hp_depth = 12
+        hp_channel_width = 406
+        hp_kernel_width = 3
+        hp_activation = "relu"
+        hp_pre_out_activation = "elu"
         hp_norm = hp.Boolean("norm", default=False)
-        hp_dropout = hp.Float("dropout", 0.0, 0.5, default=0.0)
-        hp_optimizer = hp.Choice("optimizer", ["SGD", "Adam"], default="Adam")
+        hp_dropout = 0.175
+        hp_optimizer = "Adam"
+        hp_loss = hp.Choice("loss", ["mse", "mean_absolute_error", "kl_divergence"])
 
         channel_dims = [hp_channel_width] * hp_depth
         kernels = [hp_kernel_width] * hp_depth
@@ -180,11 +218,17 @@ class CNNHyperModel(kt.HyperModel):
         elif hp_optimizer == "SGD":
             my_optimizer = keras.optimizers.SGD(learning_rate=clr)
 
+        if hp_loss == "mse":
+            loss = mse_adjusted
+        elif hp_loss == "mean_absolute_error":
+            loss = mae_adjusted
+        elif hp_loss == "kl_divergence":
+            loss = tf.keras.losses.KLDivergence()
         # compile
         model.compile(
             optimizer=my_optimizer,
-            loss="mse",
-            metrics=["mse", "mae", "accuracy"],
+            loss=loss,
+            metrics=["mse", "mae", "accuracy", mse_adjusted, mae_adjusted, continuous_ranked_probability_score],
         )
 
         print(model.summary())
@@ -197,7 +241,7 @@ class CNNHyperModel(kt.HyperModel):
             **kwargs,
         )
 
-    def get_normalization_layer(self, norm=None, axis=[1, 2]):
+    def get_normalization_layer(self, norm=None, axis=1):
         """
         Return normalization layer given string
         Args:
@@ -249,7 +293,7 @@ def main():
 
     batch_size = 512  # Adjust the batch size according to your available GPU memory
     shuffle_buffer = 2000
-    max_epochs = 5
+    max_epochs = 15
 
     if os.environ["KERASTUNER_TUNER_ID"] != "chief":
         logging.debug("Loading data")
@@ -287,8 +331,12 @@ def main():
                                                     tf.TensorSpec(shape=(60, 6), dtype=tf.float32),
                                                     tf.TensorSpec(shape=(60, 10), dtype=tf.float32)))
 
-        train_ds = train_ds.repeat(max_epochs).shuffle(shuffle_buffer).batch(batch_size, drop_remainder=True)
-        val_ds = val_ds.batch(batch_size)
+        train_ds = train_ds.repeat(max_epochs) \
+            .shuffle(shuffle_buffer) \
+            .batch(batch_size, drop_remainder=True) \
+            .prefetch(tf.data.AUTOTUNE)
+        val_ds = val_ds.batch(batch_size) \
+                    .prefetch(tf.data.AUTOTUNE)
 
         #train_ds = tf.data.TFRecordDataset(train_fnames) \
         #    .map(decode_fn, num_parallel_calls=tf.data.AUTOTUNE) \
@@ -309,13 +357,13 @@ def main():
 
     tuner = kt.Hyperband(
         hypermodel=CNNHyperModel(),
-        objective="val_loss",
+        objective=kt.Objective("val_mse_adjusted", direction="min"),
         max_epochs=max_epochs,
         factor=3,
         hyperband_iterations=1,
         overwrite=False,
         directory="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results",
-        project_name="bair",
+        project_name="bair_deep_sweep",
     )
 
     print("Tuner created")
@@ -324,12 +372,13 @@ def main():
         "verbose": 1,
         "shuffle": True,
         "use_multiprocessing": True,
+        "workers": 4,
         "callbacks": [
             callbacks.EarlyStopping("val_loss", patience=10),
             #callbacks.TensorBoard(
             #    log_dir="/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/logs/bair/logs_tensorboard", histogram_freq=1
             #),
-            callbacks.ModelCheckpoint("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_backup", verbose=1),
+            callbacks.ModelCheckpoint("/shared/ritwik/dev/E3SM-MMF_baseline/HPO/baseline_v1/results/bair_deep_sweep_backup", verbose=1),
         ],
     }
     
