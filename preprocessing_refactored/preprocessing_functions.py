@@ -45,21 +45,21 @@ class data_preprocessing:
         # read inputs
         return self.get_xrdata(input_file, self.input_vars)
 
-    def get_output(self, output_file, input_file = ""):
+    def get_target(self, target_file, input_file = ""):
         '''
-        This function reads in a file and returns an xarray dataset with the output variables for the emulator.
+        This function reads in a file and returns an xarray dataset with the target variables for the emulator.
         '''
         # read inputs
         if input_file == "":
-            input_file = output_file.replace('.mlo.','.mli.')
+            input_file = target_file.replace('.mlo.','.mli.')
         ds_input = self.get_input(input_file)
         
-        ds_output = self.get_xrdata(output_file)
+        ds_target = self.get_xrdata(target_file)
         # each timestep is 20 minutes which corresponds to 1200 seconds
-        ds_output['ptend_t'] = (ds_output['state_t'] - ds_input['state_t'])/1200 # T tendency [K/s]
-        ds_output['ptend_q0001'] = (ds_output['state_q0001'] - ds_input['state_q0001'])/1200 # Q tendency [kg/kg/s]
-        ds_output = ds_output[self.output_vars]
-        return ds_output
+        ds_target['ptend_t'] = (ds_target['state_t'] - ds_input['state_t'])/1200 # T tendency [K/s]
+        ds_target['ptend_q0001'] = (ds_target['state_q0001'] - ds_input['state_q0001'])/1200 # Q tendency [kg/kg/s]
+        ds_target = ds_target[self.output_vars]
+        return ds_target
 
     def load_ncdata_with_generator(self, filelist:list):
         '''
