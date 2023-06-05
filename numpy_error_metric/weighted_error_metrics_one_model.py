@@ -136,4 +136,4 @@ np.save(model_name+'_MAE.npy',MAE)
 np.save(model_name+'_RMSE.npy',RMSE)
 
 R2 = 1 - np.sum( (pred_daily-test_daily)**2, axis=0)/np.sum( (test_daily-np.mean(test_daily, axis=0))**2, axis=0)
-np.save(model_name+'_R2.npy',R2_mean)
+np.save(model_name+'_R2.npy',R2)
