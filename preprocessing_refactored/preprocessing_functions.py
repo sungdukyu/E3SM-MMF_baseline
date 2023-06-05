@@ -64,6 +64,8 @@ class data_preprocessing:
     def load_ncdata_with_generator(self, filelist:list):
         '''
         This function works as a dataloader when training the emulator with raw netCDF files.
+        mli corresponds to input
+        mlo corresponds to output
         '''
         def gen():
             for file in filelist:
@@ -107,17 +109,17 @@ class data_preprocessing:
         data_loader = self.load_ncdata_with_generator(data_files)
         npy_iterator = list(data_loader.as_numpy_iterator())
         npy_input = np.concatenate([npy_iterator[x][0] for x in range(len(npy_iterator))])
-        npy_target = np.concatenate([npy_iterator[x][1] for x in range(len(npy_iterator))])
+        npy_output = np.concatenate([npy_iterator[x][1] for x in range(len(npy_iterator))])
         with open(save_path + prefix + '_input.npy', 'wb') as f:
             np.save(f, np.float32(npy_input))
-        with open(save_path + prefix + '_target.npy', 'wb') as f:
-            np.save(f, np.float32(npy_target))
+        with open(save_path + prefix + '_output.npy', 'wb') as f:
+            np.save(f, np.float32(npy_output))
         if save_latlontime_dict:
             dates = [re.sub('^.*mli\.', '', x) for x in data_files]
             dates = [re.sub('\.nc$', '', x) for x in dates]
             repeat_dates = []
             for date in dates:
-                for i in range(384):
+                for i in range(self.latlonnum):
                     repeat_dates.append(date)
             latlontime = {i: [(self.grid_info['lat'].values[i%self.latlonnum], self.grid_info['lon'].values[i%self.latlonnum]), repeat_dates[i]] for i in range(npy_input.shape[0])}
             with open(save_path + prefix + '_indextolatlontime.pkl', 'wb') as f:
@@ -147,12 +149,7 @@ class data_preprocessing:
         '''
         return os.popen(' '.join(['ls', data_path])).read().splitlines()
     
-    @staticmethod
-    def concatenate_arrays(xrdata, vars):
-        '''
-        
-        '''
-        return np.concatenate([np.atleast_1d(xrdata[var].values) for var in vars])
+
     
 
 
