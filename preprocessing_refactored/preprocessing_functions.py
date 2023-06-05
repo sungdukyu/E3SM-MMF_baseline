@@ -149,6 +149,62 @@ class data_preprocessing:
         '''
         return os.popen(' '.join(['ls', data_path])).read().splitlines()
     
+    @staticmethod
+    def reshape_input_for_cnn(npy_input, save_path = ''):
+        '''
+        This function reshapes a numpy input array to be compatible with CNN training.
+        Each variable becomes its own channel.
+        For the input there are 6 channels, each with 60 vertical levels.
+        The last 4 channels correspond to scalars repeated across all 60 levels.
+        '''
+        npy_input_cnn = np.stack([
+            npy_input[:, 0:60],
+            npy_input[:, 60:120],
+            np.repeat(npy_input[:, 120][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_input[:, 121][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_input[:, 122][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_input[:, 123][:, np.newaxis], 60, axis = 1)], axis = 2)
+        return npy_input_cnn
+    
+    @staticmethod
+    def reshape_output_for_cnn(npy_output, save_path = ''):
+        '''
+        This function reshapes a numpy output array to be compatible with CNN training.
+        Each variable becomes its own channel.
+        For the input there are 6 channels, each with 60 vertical levels.
+        The last 4 channels correspond to scalars repeated across all 60 levels.
+        '''
+        npy_output_cnn = np.stack([
+            npy_output[:, 0:60],
+            npy_output[:, 60:120],
+            np.repeat(npy_output[:, 120][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 121][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 122][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 123][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 124][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 125][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 126][:, np.newaxis], 60, axis = 1),
+            np.repeat(npy_output[:, 127][:, np.newaxis], 60, axis = 1)], axis = 2)
+        return npy_output_cnn
+    
+    @staticmethod
+    def reshape_output_from_cnn(npy_predict_cnn, save_path = ''):
+        '''
+        This function reshapes CNN output to (num_samples, 128) for standardized metrics
+        '''
+        npy_predict_cnn_reshaped = np.concatenate([
+            npy_predict_cnn[:,:,0],
+            npy_predict_cnn[:,:,1],
+            np.mean(npy_predict_cnn[:,:,2], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,3], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,4], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,5], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,6], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,7], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,8], axis = 1)[:, np.newaxis],
+            np.mean(npy_predict_cnn[:,:,9], axis = 1)[:, np.newaxis]], axis = 1)
+        return npy_predict_cnn_reshaped
+    
 
     
 
