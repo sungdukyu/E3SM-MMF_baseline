@@ -151,5 +151,5 @@ class HeteroskedasticRegression(torch.nn.Module):
             plt.plot((prec**(-0.5)).detach().cpu().numpy().T, c="C1", alpha=1/100)
             plt.tight_layout()
             plt.savefig('results/tmp_last_batch.png')
-            plt.show()
+            # plt.show()
             plt.close('all')

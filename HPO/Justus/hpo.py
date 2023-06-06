@@ -113,7 +113,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
         results[m] = results[m].mean().cpu().numpy()
         print('%s: %.4g' % (m, results[m]))
     if plot:
-        plt.show()
+        # plt.show()
         plt.close('all')
     return results, all_preds
 
@@ -199,7 +199,7 @@ def hsr(tasks):
         }
 
         hyperparameter_tuning(
-            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=200, save_dir='models/hetreg_sweep+/')
+            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=200, save_dir='models/hsr_sweep+/')
 
     if 'test' in tasks:
         train_params = {
