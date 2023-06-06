@@ -24,6 +24,7 @@ class NumpyData(Dataset):
 
     def __init__(self, dir_x, dir_y, process_x=None, process_y=None, transform=None):
         self.transform = transform
+        self._norm = None
 
         self.datax = torch.from_numpy(np.load(dir_x))
         if process_x is not None:
@@ -35,11 +36,21 @@ class NumpyData(Dataset):
     def __len__(self):
         return self.datax.shape[0]
 
+    @property
+    def norm(self):
+        if self._norm is None:
+            # self._norm = [np.ones_like(self.datax.shape[0]), np.ones_like(self.datax.shape[1])]
+            self._norm = [self.datax.std(axis=0), self.datay.std(axis=0)]
+        return self._norm
+
     def __getitem__(self, idx):
         x = self.datax[idx]
         y = self.datay[idx]
         if self.transform is not None:
-            x = self.transform(x)
+            mx, my = self.norm[0] != 0, self.norm[1] != 0
+            x[:, mx] = x[:, mx] / self.norm[0][mx]
+            y[:, my] = y[:, my] / self.norm[1][my]
+            # x = self.transform(x)
         return {'x': x, 'y': y}
 
     def __getitems__(self, idxs):
