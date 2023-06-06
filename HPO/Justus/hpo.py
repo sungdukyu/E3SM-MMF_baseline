@@ -8,6 +8,7 @@ import torch
 from data import get_data
 from tools import progress, hyperparameter_tuning
 from cvae import ConditionalVAE
+from hsr import HeteroskedasticRegression
 
 
 sns.set_theme(style='whitegrid')
@@ -18,13 +19,13 @@ def train(train_params, data=None, load_path=None, save_path=None):
     """
     Initialize, load, and train a Conditional VAE on the training data, returns the callable regressor / sampler
     """
-    vae = ConditionalVAE(**train_params.pop('model_params')).to(device)
+    net = train_params.pop('model')(**train_params.pop('model_params')).to(device)
     if load_path is not None:
-        vae.load_state_dict(torch.load(load_path))
+        net.load_state_dict(torch.load(load_path))
     if data is not None:
-        vae.trainer(data, save=save_path, **train_params)
-    vae.eval()
-    return partial(vae.sample, random=False), vae.sample
+        net.trainer(data, save=save_path, **train_params)
+    net.eval()
+    return partial(net.sample, random=False), partial(net.sample, random=True)
 
 
 def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_samples=False):
@@ -35,7 +36,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
     all_preds = []
     all_samples = None
     if save_samples:
-        hf_s = h5py.File('cvae_samples.h5', 'w')
+        hf_s = h5py.File('tmp_samples.h5', 'w')
         all_samples = hf_s.create_dataset('pred', (0, 128, 128), maxshape=(None, 128, 128))
     with torch.no_grad():
         for batch in progress(data, text='Evaluating'):
@@ -66,6 +67,13 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
                     ths_res = ((y - y_hat) ** 2).sum(axis=0)
                 elif m == 'mae':
                     ths_res = torch.abs(y - y_hat).sum(axis=0)
+                elif m == 'mle':
+                    ths_res = (((y - y_hat) / y_hat_std) ** 2 - torch.log(y_hat_std)).sum(axis=0)
+                # elif m == 'crps':
+                #     # Analytically
+                #     w = ((y - mu) * prec**0.5).cpu()
+                #     lk = (w * (2 * norm().cdf(w) - 1) + 2 * norm().pdf(w) - np.pi**(-0.5)) / prec.cpu()**0.5
+                #     ths_res = lk.mean(axis=0)
                 elif m == 'crps_ecdf':
                     n = y_hats.shape[2]
                     # E[Y - y]
@@ -85,7 +93,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
                     raise ValueError('Unknown metric')
                 results[m] += ths_res
     if save_preds:
-        hf = h5py.File('cvae.h5', 'w')
+        hf = h5py.File('tmp_preds.h5', 'w')
         all_preds = torch.cat(all_preds).cpu().numpy()
         hf.create_dataset('pred', data=all_preds)
         hf.close()
@@ -158,18 +166,19 @@ def hsr(tasks):
     -----
     task - list of tasks from ['test', 'eval', 'sweep']
     """
-    metrics = ['mse', 'mae', 'mle', 'crps', 'crps_ecdf']
+    metrics = ['mse', 'mae', 'mle', 'crps_ecdf']
     if 'sweep' in tasks:
         sweep = {
+            'model': HeteroskedasticRegression,
             'model_params': {
                 'hidden_dims': {
-                    'values': [128, 256, 512, 1024, 2048]
+                    'values': [256, 512, 1024, 2048]
                 },
                 'layers': {
-                    'values': [1, 2, 3, 4]
+                    'values': [2, 3, 4]
                 }
             },
-            'epochs': 10,
+            'epochs': 12,
             'optimizer': {
                 'values': ['adam', 'sgd']
             },
@@ -179,8 +188,8 @@ def hsr(tasks):
                 'distribution': 'log_uniform'
             },
             'gamma': {
-                'max': 1,
-                'min': 0.13,
+                'max': 0.1,
+                'min': 0.001,
                 'distribution': 'log_uniform'
             },
             'loss_type': 'mle',
@@ -190,28 +199,34 @@ def hsr(tasks):
         }
 
         hyperparameter_tuning(
-            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=100, save_dir='models/hetreg_sweep2/')
+            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=200, save_dir='models/hetreg_sweep+/')
 
     if 'test' in tasks:
         train_params = {
+            'model': HeteroskedasticRegression,
             'model_params': {
-                'latent_dims': 15,
                 'hidden_dims': 1024,
-                'layers': 2,
-                'beta': 0.0001
+                'layers': 3,
             },
-            'epochs': 1,
+            'epochs': 12,
             'optimizer': 'adam',
             'lr': 0.0001,
-            'weight_decay': 0.001,
-            'loss_type': 'mse',
+            'gamma': 0.01,
+            'loss_type': 'mle',
             'batch_size': 4096,
         }
-        train_and_eval(train_params, metrics, save_path='models/tmp_hsr.cp')
-        load_eval(train_params=train_params, metrics=metrics, save_dir='models/tmp_hsr.cp', save_preds=True)
+        # train_and_eval(train_params, metrics, save_path='models/tmp_hsr.cp')
+        load_eval(train_params=train_params, metrics=metrics, save_dir='models/test_hsr.cp', save_preds=True, save_samples=True)
 
     if 'eval' in tasks:
         load_eval('models/hetreg_sweep/', metrics)
+
+    '''
+    mse: 0.004088
+    mae: 0.02186
+    mle: 6.59
+    crps_ecdf: 6.016e-06
+    '''
 
 
 def cvae(tasks):
@@ -225,19 +240,20 @@ def cvae(tasks):
     metrics = ['mse', 'mae', 'crps_ecdf', 'std', 'cond-std']
     if 'sweep' in tasks:
         sweep = {
+            'model': ConditionalVAE,
             'model_params': {
                 'latent_dims': {
-                    'values': [4, 8, 16, 32, 64]
+                    'values': [4, 8, 16, 32]
                 },
                 'hidden_dims': {
-                    'values': [128, 256, 512, 1024, 2048]
+                    'values': [256, 512, 1024, 2048]
                 },
                 'layers': {
-                    'values': [1, 2, 3, 4]
+                    'values': [2, 3, 4]
                 },
                 'beta': {
-                    'max': 1,
-                    'min': 0.00001,
+                    'max': 10,
+                    'min': 0.01,
                     'distribution': 'log_uniform'
                 },
             },
@@ -251,7 +267,7 @@ def cvae(tasks):
                 'distribution': 'log_uniform'
             },
             'weight_decay': {
-                'max': 0.1,
+                'max': 0.001,
                 'min': 0.00001,
                 'distribution': 'log_uniform'
             },
@@ -262,15 +278,16 @@ def cvae(tasks):
         }
 
         hyperparameter_tuning(
-            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=100, save_dir='models/cvae_sweep_norm/')
+            sweep, partial(train_and_eval, metrics=metrics), 'crps_ecdf', runs=200, save_dir='models/cvae_sweep+/')
 
     if 'test' in tasks:
         train_params = {
+            'model': ConditionalVAE,
             'model_params': {
                 'latent_dims': 4,
                 'hidden_dims': 1024,
                 'layers': 3,
-                'beta': 1,
+                'beta': 0.5,
                 'dropout': 0.05
             },
             'epochs': 10,
@@ -311,4 +328,4 @@ def cvae(tasks):
 
 if __name__ == '__main__':
     # cvae(tasks=['test'])
-    hsr(tasks=['test'])
+    hsr(tasks=['sweep'])

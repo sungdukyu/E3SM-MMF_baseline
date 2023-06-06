@@ -185,7 +185,7 @@ class ConditionalVAE(torch.nn.Module):
                 # loss = ((y - y_hat) ** 2).sum() / self.label_dims + self.beta * self.encoder.kl / self.latent_dims
 
                 # means, so beta' = beta * label_dims / latent_dims
-                loss = ((y - y_mean) ** 2 / y_std + torch.log(y_std)).mean() + self.beta * self.encoder.kl
+                loss = (0.5 * (y - y_mean) ** 2 / y_std + torch.log(y_std)).mean() + self.beta * self.encoder.kl
                 # model as p0 * N(0, 1/1000) + (1-p0) * N(mean, std)
                 # loss = (p0 * y**2).sum() + ((1 - p0) * ((y - y_mean) ** 2 / y_std + torch.log(y_std))).mean() + self.beta * self.encoder.kl
             else:
@@ -213,5 +213,5 @@ class ConditionalVAE(torch.nn.Module):
             ax[0].set_ylim([-0.5, 0.5])
             plt.tight_layout()
             plt.savefig('results/tmp_last_batch.png')
-            plt.show()
+            # plt.show()
             plt.close('all')
