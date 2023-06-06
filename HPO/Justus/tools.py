@@ -123,7 +123,7 @@ def hyperparameter_tuning(sweep, train_and_eval, metric=None, runs=10, save_dir=
         pprint(train_params) 
         record[1] += [i]
         record[2] += [deepcopy(train_params)]
-        result = train_and_eval(train_params, save_path=save_dir + '%d.cp' % i if save_dir is not None else None)
+        result = train_and_eval(train_params, save_path=save_dir + '%d.cp' % i if save_dir is not None else None)[0]
         record[0] += [result]
     order = sorted(record[1], key=lambda i: record[0][i][metric])
     record = [[r[i] for i in order] for r in record]

@@ -37,7 +37,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
     all_samples = None
     if save_samples:
         hf_s = h5py.File('tmp_samples.h5', 'w')
-        all_samples = hf_s.create_dataset('pred', (0, 128, 128), maxshape=(None, 128, 128))
+        all_samples = hf_s.create_dataset('pred', (0, 128, 32), maxshape=(None, 128, 32))
     with torch.no_grad():
         for batch in progress(data, text='Evaluating'):
             x = batch['x'].to(device)
@@ -53,7 +53,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
             y *= norm_y
 
             # Sample
-            y_hats = torch.stack([sample(x) * norm_y for _ in range(128)], 2).sort(dim=-1)[0]
+            y_hats = torch.stack([sample(x) * norm_y for _ in range(32)], 2).sort(dim=-1)[0]
 
             if save_preds:
                 all_preds += [y_hat]
@@ -98,7 +98,9 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
         hf.create_dataset('pred', data=all_preds)
         hf.close()
     if save_samples:
+        # TODO
         hf_s.close()
+        pass
     for i, m in enumerate(metrics):
         results[m] /= len(data.dataset)
         if plot:
@@ -115,7 +117,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
     if plot:
         # plt.show()
         plt.close('all')
-    return results, all_preds
+    return results, [all_preds, all_samples]
 
 
 def train_and_eval(train_params, metrics, save_path=None):
@@ -141,7 +143,7 @@ def load_eval(save_dir, metrics, i=0, save_preds=False, save_samples=False, retr
             record = pickle.load(f)
             id, train_params = record[1][i], record[2][i]
             load_path = save_dir + '%d.cp' % id
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         # Load individual
         load_path = save_dir
     if retrain:
@@ -152,10 +154,11 @@ def load_eval(save_dir, metrics, i=0, save_preds=False, save_samples=False, retr
     else:
         _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
         model, sample = train(train_params, load_path=load_path)
-    _, preds = eval(model, data_val, metrics, sample=sample, save_preds=save_preds, save_samples=save_samples)
-    from aziz import rs, skill
+    _, [preds, samples] = eval(model, data_val, metrics, sample=sample, save_preds=save_preds, save_samples=save_samples)
+    from aziz import rs, skill, crps
     skill(data_val.dataset.datay.cpu().numpy(), preds)
     rs(data_val.dataset.datay.cpu().numpy(), preds)
+    # crps(data_val.dataset.datay.cpu().numpy(), samples)
 
 
 def hsr(tasks):
@@ -206,12 +209,12 @@ def hsr(tasks):
             'model': HeteroskedasticRegression,
             'model_params': {
                 'hidden_dims': 1024,
-                'layers': 3,
+                'layers': 4,
             },
             'epochs': 12,
             'optimizer': 'adam',
-            'lr': 0.0001,
-            'gamma': 0.01,
+            'lr': 0.000377,
+            'gamma': 0.00796,
             'loss_type': 'mle',
             'batch_size': 4096,
         }
@@ -219,14 +222,7 @@ def hsr(tasks):
         load_eval(train_params=train_params, metrics=metrics, save_dir='models/test_hsr.cp', save_preds=True, save_samples=True)
 
     if 'eval' in tasks:
-        load_eval('models/hetreg_sweep/', metrics)
-
-    '''
-    mse: 0.004088
-    mae: 0.02186
-    mle: 6.59
-    crps_ecdf: 6.016e-06
-    '''
+        load_eval('models/hsr_sweep+/', metrics, save_preds=True, save_samples=True)
 
 
 def cvae(tasks):
@@ -306,26 +302,10 @@ def cvae(tasks):
         # load_eval('models/cvae_sweep2/', metrics)
         # load_eval('models/cvae_sweep3/', metrics)
 
-    '''
-    mse: 0.00413
-    mae: 0.02422
-    crps_ecdf: 5.194e-05
-    std: 7.894e-05
-    ----- 5
-    mse: 0.004601
-    mae: 0.02384
-    crps_ecdf: 5.724e-06
-    std: 3.025e-06
-    cond-std: 8.94e-07
-    ----- 50
-    mse: 0.004084
-    mae: 0.02167
-    crps_ecdf: 5.098e-06
-    std: 1.63e-06
-    cond-std: 8.514e-07
-    '''
 
 
 if __name__ == '__main__':
     # cvae(tasks=['test'])
-    hsr(tasks=['sweep'])
+    # hsr(tasks=['sweep'])
+    cvae(tasks=['eval'])
+    # hsr(tasks=['eval'])
