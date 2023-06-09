@@ -78,6 +78,21 @@ class e3sm_preprocessing:
         return ds_target
     
     @classmethod
+    def set_reg_exps(cls, data_split, reg_exps):
+        '''
+        This function sets the regular expressions used for getting the filelist for train, val, scoring, and test.
+        '''
+        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
+        if data_split == 'train':
+            cls.train_reg_exps = reg_exps
+        elif data_split == 'val':
+            cls.val_reg_exps = reg_exps
+        elif data_split == 'scoring':
+            cls.scoring_reg_exps = reg_exps
+        elif data_split == 'test':
+            cls.test_reg_exps = reg_exps
+    
+    @classmethod
     def set_stride_sample(cls, data_split, stride_sample):
         '''
         This function sets the stride_sample for train, val, scoring, and test.
@@ -127,6 +142,8 @@ class e3sm_preprocessing:
     def load_ncdata_with_generator(self, data_split):
         '''
         This function works as a dataloader when training the emulator with raw netCDF files.
+        This can be used as a dataloader during training or it can be used to create entire datasets.
+        When used as a dataloader for training, I/O can slow down training considerably.
         mli corresponds to input
         mlo corresponds to target
         '''
