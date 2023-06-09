@@ -9,7 +9,8 @@ import netCDF4
 import h5py
 
 class e3sm_preprocessing:
-    def __init__(self, 
+    def __init__(self,
+                 data_path, 
                  input_vars, 
                  target_vars, 
                  grid_info,
@@ -19,6 +20,7 @@ class e3sm_preprocessing:
                  out_scale):
         self.latlim = [-999,999]
         self.lonlim = [-999,999]
+        self.data_path = data_path
         self.latlonnum = 384 # number of unique lat/lon grid points
         self.input_vars = input_vars
         self.target_vars = target_vars
@@ -27,8 +29,17 @@ class e3sm_preprocessing:
         self.inp_max = inp_max
         self.inp_min = inp_min
         self.out_scale = out_scale
+        self.train_regexps = None
+        self.train_stride_sample = None
         self.train_filelist = None
+        self.val_regexps = None
+        self.val_stride_sample = None
         self.val_filelist = None
+        self.scoring_regexps = None
+        self.scoring_stride_sample = None
+        self.scoring_filelist = None
+        self.test_regexps = None
+        self.test_stride_sample = None
         self.test_filelist = None
 
     def get_xrdata(self, file, file_vars = ''):
@@ -39,8 +50,8 @@ class e3sm_preprocessing:
         if file_vars != "":
             ds = ds[file_vars]
         ds = ds.merge(self.grid_info[['lat','lon']])
-        ds = ds.where((ds['lat']>self.latlim[0])*(ds['lat']<self.latlim[1]),drop=True)
-        ds = ds.where((ds['lon']>self.lonlim[0])*(ds['lon']<self.lonlim[1]),drop=True)
+        ds = ds.where((ds['lat']>self.latlim[0])*(ds['lat']<self.latlim[1]), drop=True)
+        ds = ds.where((ds['lon']>self.lonlim[0])*(ds['lon']<self.lonlim[1]), drop=True)
         return ds
 
     def get_input(self, input_file):
@@ -66,22 +77,72 @@ class e3sm_preprocessing:
         ds_target = ds_target[self.target_vars]
         return ds_target
     
-    def get_filelist(self, data_path, reg_exps, stride_sample):
+    @classmethod
+    def set_stride_sample(cls, data_split, stride_sample):
         '''
-        This function returns a list of the filepaths that match the regular expression.
+        This function sets the stride_sample for train, val, scoring, and test.
+        '''
+        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
+        if data_split == 'train':
+            cls.train_stride_sample = stride_sample
+        elif data_split == 'val':
+            cls.val_stride_sample = stride_sample
+        elif data_split == 'scoring':
+            cls.scoring_stride_sample = stride_sample
+        elif data_split == 'test':
+            cls.test_stride_sample = stride_sample
+    
+    @classmethod
+    def set_filelist(cls, data_split):
+        '''
+        This function sets the filelists corresponding to data splits for train, val, scoring, and test.
         '''
         filelist = []
-        for reg_exp in reg_exps:
-            filelist = filelist + glob.glob(data_path + "*/" + reg_exp)
-        filelist = sorted(filelist)[::stride_sample]
-        return filelist
+        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
+        if data_split == 'train':
+            assert cls.train_reg_exps is not None, 'reg_exps for train is not set.'
+            assert cls.train_stride_sample is not None, 'stride_sample for train is not set.'
+            for reg_exp in cls.train_reg_exps:
+                filelist = filelist + glob.glob(cls.data_path + "*/" + reg_exp)
+            cls.train_filelist = sorted(filelist)[::cls.train_stride_sample]
+        elif data_split == 'val':
+            assert cls.val_reg_exps is not None, 'reg_exps for val is not set.'
+            assert cls.val_stride_sample is not None, 'stride_sample for val is not set.'
+            for reg_exp in cls.val_reg_exps:
+                filelist = filelist + glob.glob(cls.data_path + "*/" + reg_exp)
+            cls.val_filelist = sorted(filelist)[::cls.val_stride_sample]
+        elif data_split == 'scoring':
+            assert cls.scoring_reg_exps is not None, 'reg_exps for scoring is not set.'
+            assert cls.scoring_stride_sample is not None, 'stride_sample for scoring is not set.'
+            for reg_exp in cls.scoring_reg_exps:
+                filelist = filelist + glob.glob(cls.data_path + "*/" + reg_exp)
+            cls.scoring_filelist = sorted(filelist)[::cls.scoring_stride_sample]
+        elif data_split == 'test':
+            assert cls.test_reg_exps is not None, 'reg_exps for test is not set.'
+            assert cls.test_stride_sample is not None, 'stride_sample for test is not set.'
+            for reg_exp in cls.test_reg_exps:
+                filelist = filelist + glob.glob(cls.data_path + "*/" + reg_exp)
+            cls.test_filelist = sorted(filelist)[::cls.test_stride_sample]
     
-    def load_ncdata_with_generator(self, filelist:list):
+    def load_ncdata_with_generator(self, data_split):
         '''
         This function works as a dataloader when training the emulator with raw netCDF files.
         mli corresponds to input
         mlo corresponds to target
         '''
+        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
+        if data_split == 'train':
+            assert self.train_filelist is not None, 'train_filelist is not set.'
+            filelist = self.train_filelist
+        elif data_split == 'val':
+            assert self.val_filelist is not None, 'val_filelist is not set.'
+            filelist = self.val_filelist
+        elif data_split == 'scoring':
+            assert self.scoring_filelist is not None, 'scoring_filelist is not set.'
+            filelist = self.scoring_filelist
+        elif data_split == 'test':
+            assert self.test_filelist is not None, 'test_filelist is not set.'
+            filelist = self.test_filelist
         def gen():
             for file in filelist:
                 # read inputs
@@ -112,7 +173,6 @@ class e3sm_preprocessing:
     def make_npy(self, 
                  reg_exps = None, 
                  prefix = '',
-                 data_path = '',
                  save_path = '', 
                  stride_sample = 7,
                  save_latlontime_dict = False):
@@ -120,7 +180,7 @@ class e3sm_preprocessing:
         This function saves the training data as a .npy file. Prefix should be train or val
         '''
         prefix = save_path + prefix
-        data_files = sorted(self.get_filelist(data_path, reg_exps, stride_sample))[::stride_sample]
+        data_files = sorted(self.get_filelist(self.data_path, reg_exps, stride_sample))[::stride_sample]
         data_loader = self.load_ncdata_with_generator(data_files)
         npy_iterator = list(data_loader.as_numpy_iterator())
         npy_input = np.concatenate([npy_iterator[x][0] for x in range(len(npy_iterator))])
@@ -165,14 +225,17 @@ class e3sm_preprocessing:
         return var_arr
 
     @staticmethod
-    def ls(data_path = ''):
+    def ls(dir_path = ''):
         '''
         You can treat this as a Python wrapper for the bash command "ls".
         '''
-        return os.popen(' '.join(['ls', data_path])).read().splitlines()
+        return os.popen(' '.join(['ls', dir_path])).read().splitlines()
     
     @staticmethod
     def set_plot_params():
+        '''
+        This function sets the plot parameters for matplotlib.
+        '''
         plt.close('all')
         plt.rcParams.update(plt.rcParamsDefault)
         plt.rc('font', family='sans')
@@ -257,9 +320,7 @@ class e3sm_preprocessing:
             with open(save_path + 'cnn_predict_reshaped.npy', 'wb') as f:
                 np.save(f, np.float32(npy_predict_cnn_reshaped))
         return npy_predict_cnn_reshaped
-    
 
-    
 
 
 
