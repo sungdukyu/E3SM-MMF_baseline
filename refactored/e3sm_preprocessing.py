@@ -187,18 +187,15 @@ class e3sm_preprocessing:
             target_shapes=((None,124),(None,128))
         )
     
-    def make_npy(self, 
-                 reg_exps = None, 
-                 prefix = '',
+    def save_as_npy(self,
+                 data_split, 
                  save_path = '', 
-                 stride_sample = 7,
                  save_latlontime_dict = False):
         '''
-        This function saves the training data as a .npy file. Prefix should be train or val
+        This function saves the training data as a .npy file. Prefix should be train or val.
         '''
-        prefix = save_path + prefix
-        data_files = sorted(self.get_filelist(self.data_path, reg_exps, stride_sample))[::stride_sample]
-        data_loader = self.load_ncdata_with_generator(data_files)
+        prefix = save_path + data_split
+        data_loader = self.load_ncdata_with_generator(data_split)
         npy_iterator = list(data_loader.as_numpy_iterator())
         npy_input = np.concatenate([npy_iterator[x][0] for x in range(len(npy_iterator))])
         npy_target = np.concatenate([npy_iterator[x][1] for x in range(len(npy_iterator))])
@@ -206,6 +203,14 @@ class e3sm_preprocessing:
             np.save(f, np.float32(npy_input))
         with open(save_path + prefix + '_target.npy', 'wb') as f:
             np.save(f, np.float32(npy_target))
+        if data_split == 'train':
+            data_files = self.train_filelist
+        elif data_split == 'val':
+            data_files = self.val_filelist
+        elif data_split == 'scoring':
+            data_files = self.scoring_filelist
+        elif data_split == 'test':
+            data_files = self.test_filelist
         if save_latlontime_dict:
             dates = [re.sub('^.*mli\.', '', x) for x in data_files]
             dates = [re.sub('\.nc$', '', x) for x in dates]
