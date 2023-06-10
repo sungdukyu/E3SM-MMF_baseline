@@ -29,6 +29,10 @@ class e3sm_preprocessing:
         self.inp_max = inp_max
         self.inp_min = inp_min
         self.out_scale = out_scale
+        self.lats, lats_indices = np.unique(self.grid_info['lat'].values, return_index=True)
+        self.lons, lons_indices = np.unique(self.grid_info['lon'].values, return_index=True)
+        self.sort_lat_key = np.argsort(self.grid_info['lat'].values[np.sort(lats_indices)])
+        self.sort_lon_key = np.argsort(self.grid_info['lon'].values[np.sort(lons_indices)])
         self.train_regexps = None
         self.train_stride_sample = None
         self.train_filelist = None
@@ -221,6 +225,7 @@ class e3sm_preprocessing:
             latlontime = {i: [(self.grid_info['lat'].values[i%self.latlonnum], self.grid_info['lon'].values[i%self.latlonnum]), repeat_dates[i]] for i in range(npy_input.shape[0])}
             with open(save_path + prefix + '_indextolatlontime.pkl', 'wb') as f:
                 pickle.dump(latlontime, f)
+            
         return
     
     def create_pressure_grid(self, ps, save_path = ""):
