@@ -199,7 +199,7 @@ class e3sm_utils:
         mli corresponds to input
         mlo corresponds to target
         '''
-        filelist = e3sm_utils.get_filelist(data_split)
+        filelist = self.get_filelist(data_split)
         def gen():
             for file in filelist:
                 # read inputs
