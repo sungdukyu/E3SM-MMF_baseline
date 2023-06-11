@@ -7,8 +7,9 @@ import re
 import tensorflow as tf
 import netCDF4
 import h5py
+from tqdm import tqdm
 
-class e3sm_preprocessing:
+class e3sm_utils:
     def __init__(self,
                  data_path, 
                  input_vars, 
@@ -18,8 +19,6 @@ class e3sm_preprocessing:
                  inp_max,
                  inp_min,
                  out_scale):
-        self.latlim = [-999,999]
-        self.lonlim = [-999,999]
         self.data_path = data_path
         self.latlonnum = 384 # number of unique lat/lon grid points
         self.input_vars = input_vars
@@ -33,6 +32,10 @@ class e3sm_preprocessing:
         self.lons, lons_indices = np.unique(self.grid_info['lon'].values, return_index=True)
         self.sort_lat_key = np.argsort(self.grid_info['lat'].values[np.sort(lats_indices)])
         self.sort_lon_key = np.argsort(self.grid_info['lon'].values[np.sort(lons_indices)])
+        self.indextolatlon = {i: (self.grid_info['lat'].values[i%self.latlonnum], self.grid_info['lon'].values[i%self.latlonnum]) for i in range(self.latlonnum)}
+        self.hyam = self.grid_info['hyam'].values
+        self.hybm = self.grid_info['hybm'].values
+        self.pzero = 1e5 # code assumes this will always be a scalar
         self.train_regexps = None
         self.train_stride_sample = None
         self.train_filelist = None
@@ -45,17 +48,20 @@ class e3sm_preprocessing:
         self.test_regexps = None
         self.test_stride_sample = None
         self.test_filelist = None
+        self.pressure_grid_4d = None # num_samples x latlon combo x pressure levels (technically 3d in terms of indexing)
+        self.pressure_grid_plot = None # this is zonally and temporally averaged
 
-    def get_xrdata(self, file, file_vars = ''):
+    def get_xrdata(self, file, file_vars = None):
         '''
         This function reads in a file and returns an xarray dataset with the variables specified.
+        file_vars must be a list of strings.
         '''
         ds = xr.open_dataset(file, engine = 'netcdf4')
-        if file_vars != "":
+        if file_vars is not None:
             ds = ds[file_vars]
         ds = ds.merge(self.grid_info[['lat','lon']])
-        ds = ds.where((ds['lat']>self.latlim[0])*(ds['lat']<self.latlim[1]), drop=True)
-        ds = ds.where((ds['lon']>self.lonlim[0])*(ds['lon']<self.lonlim[1]), drop=True)
+        ds = ds.where((ds['lat']>-999)*(ds['lat']<999), drop=True)
+        ds = ds.where((ds['lon']>-999)*(ds['lon']<999), drop=True)
         return ds
 
     def get_input(self, input_file):
@@ -142,28 +148,58 @@ class e3sm_preprocessing:
             for reg_exp in cls.test_reg_exps:
                 filelist = filelist + glob.glob(cls.data_path + "*/" + reg_exp)
             cls.test_filelist = sorted(filelist)[::cls.test_stride_sample]
+
+    @classmethod
+    def get_filelist(cls, data_split):
+        '''
+        This function returns the filelist corresponding to data splits for train, val, scoring, and test.
+        '''
+        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
+        if data_split == 'train':
+            assert cls.train_filelist is not None, 'filelist for train is not set.'
+            return cls.train_filelist
+        elif data_split == 'val':
+            assert cls.val_filelist is not None, 'filelist for val is not set.'
+            return cls.val_filelist
+        elif data_split == 'scoring':
+            assert cls.scoring_filelist is not None, 'filelist for scoring is not set.'
+            return cls.scoring_filelist
+        elif data_split == 'test':
+            assert cls.test_filelist is not None, 'filelist for test is not set.'
+            return cls.test_filelist
+
+    def get_pressure_grid(self, data_split):
+        '''
+        This function creates the temporally and zonally averaged pressure grid corresponding to a given data split.
+        '''
+        filelist = self.get_filelist(data_split)
+        ps = np.concatenate([self.get_xrdata(file, ['state_ps'])['state_ps'].values[np.newaxis, :] for file in tqdm(filelist)], axis = 0)[:, :, np.newaxis]
+        hyam_component = self.hyam[np.newaxis, np.newaxis, :]*e3sm_utils.pzero
+        hybm_component = self.hybm[np.newaxis, np.newaxis, :]*ps
+        pressures = np.mean(hyam_component + hybm_component, axis = 0)
+        def find_keys(dictionary, value):
+            keys = []
+            for key, val in dictionary.items():
+                if val[0] == value:
+                    keys.append(key)
+            return keys
+        pg_lats = []
+        for lat in self.lats:
+            indices = find_keys(self.indextolatlon, lat)
+            pg_lats.append(np.mean(pressures[indices, :], axis = 0)[:, np.newaxis])
+        pressure_grid = np.concatenate(pg_lats, axis = 1)
+        return pressure_grid
     
     def load_ncdata_with_generator(self, data_split):
         '''
         This function works as a dataloader when training the emulator with raw netCDF files.
         This can be used as a dataloader during training or it can be used to create entire datasets.
         When used as a dataloader for training, I/O can slow down training considerably.
+        This function also normalizes the data.
         mli corresponds to input
         mlo corresponds to target
         '''
-        assert data_split in ['train', 'val', 'scoring', 'test'], 'Provided data_split is not valid. Available options are train, val, scoring, and test.'
-        if data_split == 'train':
-            assert self.train_filelist is not None, 'train_filelist is not set.'
-            filelist = self.train_filelist
-        elif data_split == 'val':
-            assert self.val_filelist is not None, 'val_filelist is not set.'
-            filelist = self.val_filelist
-        elif data_split == 'scoring':
-            assert self.scoring_filelist is not None, 'scoring_filelist is not set.'
-            filelist = self.scoring_filelist
-        elif data_split == 'test':
-            assert self.test_filelist is not None, 'test_filelist is not set.'
-            filelist = self.test_filelist
+        filelist = e3sm_utils.get_filelist(data_split)
         def gen():
             for file in filelist:
                 # read inputs
@@ -176,13 +212,12 @@ class e3sm_preprocessing:
                 ds_target = ds_target*self.out_scale
 
                 # stack
-                #ds = ds.stack({'batch':{'sample','ncol'}})
+                # ds = ds.stack({'batch':{'sample','ncol'}})
                 ds_input = ds_input.stack({'batch':{'ncol'}})
                 ds_input = ds_input.to_stacked_array('mlvar', sample_dims=['batch'], name='mli')
-                #dso = dso.stack({'batch':{'sample','ncol'}})
+                # dso = dso.stack({'batch':{'sample','ncol'}})
                 ds_target = ds_target.stack({'batch':{'ncol'}})
                 ds_target = ds_target.to_stacked_array('mlvar', sample_dims=['batch'], name='mlo')
-                
                 yield (ds_input.values, ds_target.values)
 
         return tf.data.Dataset.from_generator(
@@ -225,23 +260,6 @@ class e3sm_preprocessing:
             latlontime = {i: [(self.grid_info['lat'].values[i%self.latlonnum], self.grid_info['lon'].values[i%self.latlonnum]), repeat_dates[i]] for i in range(npy_input.shape[0])}
             with open(save_path + prefix + '_indextolatlontime.pkl', 'wb') as f:
                 pickle.dump(latlontime, f)
-            
-        return
-    
-    def create_pressure_grid(self, ps, save_path = ""):
-        '''
-        This function unscales the pressure variable so that it can be used to create a pressure grid.
-        '''
-        unscaled_ps = ps * (self.inp_max["state_ps"].values - self.inp_min["state_ps"].values) + self.inp_mean["state_ps"].values
-        unscaled_ps = unscaled_ps[:, np.newaxis]
-        num_samples = unscaled_ps.shape[0]
-        hyam_component = np.repeat(self.grid_info["hyam"].values[np.newaxis, :], num_samples, axis=0)*1e5
-        hybm_component = np.repeat(self.grid_info["hybm"].values[np.newaxis, :], num_samples, axis=0)*unscaled_ps
-        pressure_grid = hyam_component + hybm_component
-        if save_path != "":
-            with open(save_path + "pressure_grid.npy", "wb") as f:
-                np.save(f, pressure_grid)
-        return pressure_grid
     
     def reshape_npy(self, var_arr, var_arr_dim):
         '''
@@ -278,7 +296,6 @@ class e3sm_preprocessing:
                             })
         # %config InlineBackend.figure_format = 'retina'
         # use the above line when working in a jupyter notebook
-        return
     
     @staticmethod
     def reshape_input_for_cnn(npy_input, save_path = ''):
