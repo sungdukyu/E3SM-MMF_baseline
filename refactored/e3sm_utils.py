@@ -174,7 +174,7 @@ class e3sm_utils:
         '''
         filelist = self.get_filelist(data_split)
         ps = np.concatenate([self.get_xrdata(file, ['state_ps'])['state_ps'].values[np.newaxis, :] for file in tqdm(filelist)], axis = 0)[:, :, np.newaxis]
-        hyam_component = self.hyam[np.newaxis, np.newaxis, :]*e3sm_utils.pzero
+        hyam_component = self.hyam[np.newaxis, np.newaxis, :]*self.pzero
         hybm_component = self.hybm[np.newaxis, np.newaxis, :]*ps
         pressures = np.mean(hyam_component + hybm_component, axis = 0)
         def find_keys(dictionary, value):
