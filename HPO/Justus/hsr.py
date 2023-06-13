@@ -1,14 +1,13 @@
-import pickle
-from functools import partial
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 import torch
-from data import get_data
-from tools import progress, hyperparameter_tuning
-from scipy.stats import norm
+from tools import progress
 
-sns.set_theme(style='whitegrid')
+
+"""
+Contains the code for the Heteroskedastic Regression Model and its training.
+"""
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 

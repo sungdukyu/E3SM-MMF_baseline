@@ -3,6 +3,11 @@ import numpy as np
 import torch
 from tools import progress
 
+
+"""
+Contains the code for the Conditional Variational Autoencoder and its training.
+"""
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 

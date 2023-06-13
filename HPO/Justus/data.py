@@ -4,10 +4,6 @@ from torch.utils.data import Dataset, DataLoader
 
 """
 Contains Methods for Data Preprocessing and Loading.
-Droplet distribution simulation data provided by Jerry Lin, available on PSC's Bridges-2.
-
-E3SM-MMF.mlo.{%4d}-{%2d}-{%2d}-{%5d}.nc - [bins(33), time(1), X(640), Y(640), Z(75)]
-    - mixing ratio, netCDF4, ~196GB (49 * ~4B) (* 6+ metrological cases, e.g. 'atex', 'dycoms')
 
 train_input.npy / train_target.npy [n(10.091.520), vars(124)] -> [..., vars(128)]
 val_input.npy / val_target.npy [n(1.441.920), vars(124)] -> [..., vars(128)]
@@ -65,9 +61,11 @@ def get_data(val_only=False, **kwargs):
     global datasets
     to_gpu = lambda x: x
     # to_gpu = lambda x: x.to(device)
+    # Validate on stride-7 data
     if datasets[0] is None and not val_only:
         datasets = [NumpyData(*[DATA_PATH_NPY + '%s_%s.npy' % (t, s) for s in ['input', 'target']],
                               process_x=to_gpu, process_y=to_gpu) for t in ['train', 'val']]
+    # Final evaluation / figures on stride-6 data
     elif datasets[1] is None and val_only:
         datasets[1] = NumpyData(*[DATA_PATH_NPY + 'val_%s_stride6.npy' % s for s in ['input', 'target']],
                                 process_x=to_gpu, process_y=to_gpu)

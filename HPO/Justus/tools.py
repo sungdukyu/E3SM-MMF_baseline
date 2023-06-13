@@ -6,6 +6,12 @@ from copy import deepcopy
 import pickle
 
 
+"""
+Contains methods for miscellaneous tasks, not specific to the models used.
+This includes printing (configuration, progress), and hyperparameter optimization.
+"""
+
+
 def progress(iterable, text=None, inner=None, timed=None):
     """
     Generator for timed for loops with progress bar
