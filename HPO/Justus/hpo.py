@@ -180,13 +180,7 @@ def load_eval(save_dir, metrics, i=0, train_params=None, save_preds=False, save_
     else:
         _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
         model, sample = train(train_params, load_path=load_path)
-    _, [preds, samples] = eval(model, data_val, metrics, sample=sample, save_preds=save_preds, save_samples=save_samples)
-
-    # todo: remove
-    # from aziz import rs, skill, crps
-    # skill(data_val.dataset.datay.cpu().numpy(), preds)
-    # rs(data_val.dataset.datay.cpu().numpy(), preds)
-    # crps(data_val.dataset.datay.cpu().numpy(), samples)
+    eval(model, data_val, metrics, sample=sample, save_preds=save_preds, save_samples=save_samples)
 
 
 def hsr(tasks):
