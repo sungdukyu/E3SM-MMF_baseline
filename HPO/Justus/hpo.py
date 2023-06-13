@@ -25,6 +25,8 @@ def train(train_params, data=None, load_path=None, save_path=None):
     if data is not None:
         net.trainer(data, save=save_path, **train_params)
     net.eval()
+    from ptflops import get_model_complexity_info
+    get_model_complexity_info(net, (4096, 124))
     return partial(net.sample, random=False), partial(net.sample, random=True)
 
 
@@ -98,9 +100,7 @@ def eval(model, data, metrics, sample=None, plot=True, save_preds=False, save_sa
         hf.create_dataset('pred', data=all_preds)
         hf.close()
     if save_samples:
-        # TODO
         hf_s.close()
-        pass
     for i, m in enumerate(metrics):
         results[m] /= len(data.dataset)
         if plot:
@@ -147,17 +147,17 @@ def load_eval(save_dir, metrics, i=0, save_preds=False, save_samples=False, retr
         # Load individual
         load_path = save_dir
     if retrain:
-        # train_params['lr'] = train_params['lr'] / 10
-        # train_params['model_params']['beta'] = train_params['model_params']['beta']
         data_train, data_val = get_data(batch_size=train_params.pop('batch_size'), shuffle=True)
         model, sample = train(train_params, data_train, save_path=save_dir + 'tmp.cp')
     else:
         _, data_val = get_data(batch_size=train_params.pop('batch_size'), val_only=True)
         model, sample = train(train_params, load_path=load_path)
     _, [preds, samples] = eval(model, data_val, metrics, sample=sample, save_preds=save_preds, save_samples=save_samples)
-    from aziz import rs, skill, crps
-    skill(data_val.dataset.datay.cpu().numpy(), preds)
-    rs(data_val.dataset.datay.cpu().numpy(), preds)
+
+    # todo: remove
+    # from aziz import rs, skill, crps
+    # skill(data_val.dataset.datay.cpu().numpy(), preds)
+    # rs(data_val.dataset.datay.cpu().numpy(), preds)
     # crps(data_val.dataset.datay.cpu().numpy(), samples)
 
 
@@ -222,7 +222,7 @@ def hsr(tasks):
         load_eval(train_params=train_params, metrics=metrics, save_dir='models/test_hsr.cp', save_preds=True, save_samples=True)
 
     if 'eval' in tasks:
-        load_eval('models/hsr_sweep+/', metrics, save_preds=True, save_samples=True)
+        load_eval('models/hsr_sweep+/', metrics, save_preds=False, save_samples=False)
 
 
 def cvae(tasks):
@@ -297,15 +297,18 @@ def cvae(tasks):
         load_eval(train_params=train_params, metrics=metrics, save_dir='models/test_cvae.cp', save_preds=True, save_samples=True)
 
     if 'eval' in tasks:
-        load_eval('models/cvae_sweep/', metrics, save_preds=True)
-        # load_eval('models/cvae_sweep/', metrics, retrain=True, save_preds=False)
-        # load_eval('models/cvae_sweep2/', metrics)
-        # load_eval('models/cvae_sweep3/', metrics)
-
+        load_eval('models/cvae_sweep/', metrics, save_preds=False, save_samples=False)
 
 
 if __name__ == '__main__':
+    # Train manually
     # cvae(tasks=['test'])
+    # hsr(tasks=['test'])
+
+    # Tune hyperparamters
+    # cvae(tasks=['sweep'])
     # hsr(tasks=['sweep'])
-    cvae(tasks=['eval'])
-    # hsr(tasks=['eval'])
+
+    # Evaluate best model
+    # cvae(tasks=['eval'])
+    hsr(tasks=['eval'])
