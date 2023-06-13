@@ -26,7 +26,11 @@ def train(train_params, data=None, load_path=None, save_path=None):
         net.trainer(data, save=save_path, **train_params)
     net.eval()
     from ptflops import get_model_complexity_info
-    get_model_complexity_info(net, (4096, 124))
+    from fvcore.nn import FlopCountAnalysis
+    flops, _ = get_model_complexity_info(net, (4096, 124))
+    print(flops / 4096 / 1024 / 1024)
+    flops = FlopCountAnalysis(net, torch.rand(4096, 124).to(device))
+    print(flops.total() / 4096 / 1024 / 1024)
     return partial(net.sample, random=False), partial(net.sample, random=True)
 
 
